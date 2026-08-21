@@ -1,0 +1,219 @@
+
+from __future__ import annotations
+
+import asyncio
+import json
+from pathlib import Path
+from typing import Any
+
+import httpx
+from pydantic import ValidationError
+
+from app.agents.providers.common import (
+    extract_message_content,
+    parse_json_object,
+    provider_error_detail,
+    strip_json_fence,
+)
+from app.agents.providers.rate_limit import provider_rpm_limiter
+from app.agents.providers.routing import provider_route
+from app.api.schemas import ProviderSuggestionResult
+from app.core.config import Settings
+from app.core.errors import ApiError
+
+TRANSIENT_STATUS = {408, 429, 500, 502, 503, 504}
+PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
+class NvidiaClient:
+    def __init__(self, settings: Settings, transport: httpx.AsyncBaseTransport | None = None):
+        self.settings = settings
+        self.transport = transport
+    def capability(self) -> dict[str, Any]:
+        route = provider_route(self.settings, "nvidia")
+        return {
+            "configured": self.settings.nvidia_configured,
+            "model": route["model"] or None,
+            "prompt_version": self.settings.nvidia_prompt_version,
+            "base_url": route["base_url"] or None,
+            "provider": route["provider"],
+        }
+    async def generate(self, context: dict[str, Any]) -> ProviderSuggestionResult:
+        if not self.settings.nvidia_configured:
+            raise ApiError(
+                503,
+                "nvidia_not_configured",
+                "AI improvements are not configured. Manual editing and export remain available.",
+            )
+        system_prompt = (PROMPTS_DIR / "improve_resume_v1.txt").read_text(encoding="utf-8")
+        schema = ProviderSuggestionResult.model_json_schema()
+        route = provider_route(self.settings, "nvidia")
+        payload = {
+            "model": route["model"],
+            "temperature": self.settings.nvidia_temperature,
+            "max_tokens": self.settings.nvidia_max_output_tokens,
+            "response_format": {"type": "json_object"},
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        {"context": context, "output_schema": schema}, separators=(",", ":")
+                    ),
+                },
+            ],
+        }
+        raw = await self._request(payload)
+        try:
+            return self._parse(raw)
+        except (json.JSONDecodeError, ValidationError, TypeError, ValueError):
+            repair_prompt = (PROMPTS_DIR / "repair_structured_output_v1.txt").read_text(encoding="utf-8")
+            repair_payload = {
+                **payload,
+                "messages": [
+                    {"role": "system", "content": repair_prompt},
+                    {
+                        "role": "user",
+                        "content": json.dumps(
+                            {"invalid_output": strip_json_fence(raw)[:12_000], "output_schema": schema},
+                            separators=(",", ":"),
+                        ),
+                    },
+                ],
+            }
+            repaired = await self._request(repair_payload)
+            try:
+                return self._parse(repaired)
+            except (json.JSONDecodeError, ValidationError, TypeError, ValueError) as exc:
+                raise ApiError(
+                    502,
+                    "invalid_provider_response",
+                    "The AI provider returned an invalid structured response.",
+                ) from exc
+    def _parse(self, content: str) -> ProviderSuggestionResult:
+        data = parse_json_object(content)
+        return ProviderSuggestionResult.model_validate(data)
+    def _strip_json_fence(self, content: str) -> str:
+        return strip_json_fence(content)
+    async def generate_structured(
+        self,
+        *,
+        system_prompt: str,
+        user_payload: dict[str, Any],
+        schema_model: type,
+        temperature: float | None = None,
+        allow_repair: bool = True,
+        max_retries: int | None = None,
+    ) -> Any:
+        if not self.settings.nvidia_configured:
+            raise ApiError(
+                503,
+                "nvidia_not_configured",
+                "AI extraction is not configured. Deterministic mapping remains available.",
+            )
+        schema = schema_model.model_json_schema()
+        route = provider_route(self.settings, "nvidia")
+        payload = {
+            "model": route["model"],
+            "temperature": self.settings.nvidia_temperature if temperature is None else temperature,
+            "max_tokens": self.settings.nvidia_max_output_tokens,
+            "response_format": {"type": "json_object"},
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        {"input": user_payload, "output_schema": schema},
+                        separators=(",", ":"),
+                    ),
+                },
+            ],
+        }
+        repair_allowed = allow_repair and bool(getattr(self.settings, "llm_allow_repair", True))
+        raw = await self._request(payload, max_retries=max_retries)
+        try:
+            return schema_model.model_validate(parse_json_object(raw))
+        except (json.JSONDecodeError, ValidationError, TypeError, ValueError):
+            if not repair_allowed:
+                raise ApiError(
+                    502,
+                    "invalid_provider_response",
+                    "The AI provider returned an invalid structured response.",
+                ) from None
+            repair_prompt = (PROMPTS_DIR / "repair_structured_output_v1.txt").read_text(encoding="utf-8")
+            repair_payload = {
+                **payload,
+                "messages": [
+                    {"role": "system", "content": repair_prompt},
+                    {
+                        "role": "user",
+                        "content": json.dumps(
+                            {"invalid_output": strip_json_fence(raw)[:12_000], "output_schema": schema},
+                            separators=(",", ":"),
+                        ),
+                    },
+                ],
+            }
+            repaired = await self._request(repair_payload, max_retries=max_retries)
+            try:
+                return schema_model.model_validate(parse_json_object(repaired))
+            except (json.JSONDecodeError, ValidationError, TypeError, ValueError) as exc:
+                raise ApiError(
+                    502,
+                    "invalid_provider_response",
+                    "The AI provider returned an invalid structured response.",
+                ) from exc
+    async def _request(self, payload: dict[str, Any], *, max_retries: int | None = None) -> str:
+        route = provider_route(self.settings, "nvidia")
+        headers = {"Content-Type": "application/json"}
+        if route["api_key"]:
+            headers["Authorization"] = f"Bearer {route['api_key']}"
+        timeout = httpx.Timeout(route["timeout_seconds"])
+        attempts = (route["max_retries"] if max_retries is None else max_retries) + 1
+        limiter = await provider_rpm_limiter(route["provider"], self.settings.llm_rpm_limit)
+        async with httpx.AsyncClient(timeout=timeout, transport=self.transport) as client:
+            for attempt in range(attempts):
+                await limiter.acquire()
+                try:
+                    response = await client.post(
+                        f"{route['base_url'].rstrip('/')}/chat/completions",
+                        headers=headers,
+                        json=payload,
+                    )
+                except (httpx.TimeoutException, httpx.NetworkError) as exc:
+                    if attempt + 1 < attempts:
+                        await asyncio.sleep(min(0.25 * (2**attempt), 1.0))
+                        continue
+                    raise ApiError(
+                        503, "nvidia_unavailable", "The AI provider is temporarily unavailable."
+                    ) from exc
+                if response.status_code in TRANSIENT_STATUS and attempt + 1 < attempts:
+                    await asyncio.sleep(min(0.25 * (2**attempt), 1.0))
+                    continue
+                if response.status_code in {401, 403}:
+                    raise ApiError(
+                        503,
+                        "nvidia_authentication_failed",
+                        "The AI improvement provider is not configured correctly. Check NVIDIA_API_KEY.",
+                    )
+                if response.status_code == 429:
+                    raise ApiError(
+                        429, "nvidia_rate_limited", "The AI provider rate limit was reached. Try again later."
+                    )
+                if response.status_code >= 500:
+                    raise ApiError(503, "nvidia_unavailable", "The AI provider is temporarily unavailable.")
+                if response.status_code >= 400:
+                    detail = provider_error_detail(response.text)
+                    message = "The AI provider rejected the improvement request."
+                    if detail:
+                        message = f"{message} ({detail})"
+                    raise ApiError(502, "nvidia_request_rejected", message)
+                try:
+                    body = response.json()
+                    content = extract_message_content(body)
+                except (ValueError, KeyError, IndexError, TypeError) as exc:
+                    raise ApiError(
+                        502, "nvidia_response_unreadable", "The AI provider response could not be read."
+                    ) from exc
+                if not isinstance(content, str) or not content.strip():
+                    raise ApiError(502, "nvidia_empty_response", "The AI provider returned no suggestions.")
+                return content
+        raise ApiError(503, "nvidia_unavailable", "The AI provider is temporarily unavailable.")

@@ -1,0 +1,137 @@
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+from typing import Any
+from urllib.parse import quote
+from uuid import UUID
+
+from app.core.config import Settings
+from app.core.errors import ApiError
+from app.features.auth.service import create_file_access_token
+
+AVATAR_MIME_BY_SUFFIX = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+}
+AVATAR_SUFFIX_BY_MIME = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+}
+def _sniff_image_mime(content: bytes) -> str | None:
+    if len(content) >= 3 and content[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if len(content) >= 8 and content[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if len(content) >= 12 and content[:4] == b"RIFF" and content[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+def validate_avatar_upload(
+    filename: str | None,
+    declared_mime: str | None,
+    content: bytes,
+    max_bytes: int,
+) -> str:
+    if not content:
+        raise ApiError(400, "empty_avatar", "The selected image is empty.")
+    if len(content) > max_bytes:
+        raise ApiError(
+            413,
+            "avatar_too_large",
+            f"Profile pictures must be {max_bytes // (1024 * 1024)} MB or smaller.",
+        )
+    sniffed = _sniff_image_mime(content)
+    if not sniffed:
+        raise ApiError(
+            415,
+            "unsupported_avatar_type",
+            "Only JPEG, PNG, and WebP profile pictures are supported.",
+        )
+    suffix = Path(filename or "").suffix.lower()
+    suffix_mime = AVATAR_MIME_BY_SUFFIX.get(suffix)
+    if suffix and suffix_mime and suffix_mime != sniffed:
+        raise ApiError(
+            415,
+            "avatar_mime_mismatch",
+            "The file extension does not match the image content.",
+        )
+    if declared_mime and declared_mime not in {sniffed, "application/octet-stream", "image/jpg"}:
+        if not (declared_mime == "image/jpg" and sniffed == "image/jpeg"):
+            raise ApiError(
+                415,
+                "avatar_mime_mismatch",
+                "The declared image type does not match the file content.",
+            )
+    return sniffed
+def avatar_extension_for_mime(mime: str) -> str:
+    return AVATAR_SUFFIX_BY_MIME.get(mime, ".jpg")
+def signed_avatar_url(
+    client,
+    settings: Settings,
+    avatar_path: str | None,
+    *,
+    user_id: str | UUID | None = None,
+) -> str | None:
+    if not avatar_path or not str(avatar_path).strip():
+        return None
+    path = str(avatar_path).strip()
+    try:
+        response = client.storage.from_(settings.avatar_bucket).create_signed_url(
+            path, settings.export_signed_url_seconds
+        )
+        url = response.get("signedURL") or response.get("signed_url")
+    except Exception as exc:
+        # Do not invent "no avatar" — keep path; surface URL failure via null URL only.
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "avatar_signed_url_failed path=%s type=%s",
+            path[:80],
+            type(exc).__name__,
+        )
+        return None
+    if not url:
+        return None
+    # Attach a path-scoped file token so <img src> works without Authorization.
+    owner = str(user_id or "").strip()
+    if not owner:
+        # Fall back to first path segment (avatars are stored as {user_id}/avatars/...).
+        owner = path.split("/", 1)[0]
+    if not owner or "token=" in url:
+        return url
+    try:
+        file_token = create_file_access_token(
+            user_id=owner,
+            bucket=settings.avatar_bucket,
+            path=path,
+            settings=settings,
+            expires_seconds=settings.export_signed_url_seconds,
+        )
+    except Exception:
+        return url
+    sep = "&" if "?" in url else "?"
+    return f"{url}{sep}token={quote(file_token, safe='')}"
+
+
+def attach_avatar_url(profile: dict[str, Any] | None, client, settings: Settings) -> dict[str, Any] | None:
+    if not profile:
+        return profile
+    enriched = dict(profile)
+    avatar_url = signed_avatar_url(
+        client,
+        settings,
+        profile.get("avatar_path"),
+        user_id=profile.get("id") or profile.get("user_id"),
+    )
+    enriched["avatar_url"] = avatar_url
+    # Keep avatar_path even when URL generation fails so storage outages do not
+    # look like "user deleted avatar" and do not get written back as null.
+    return enriched
+def safe_avatar_filename(filename: str | None) -> str:
+    name = Path(filename or "avatar").name
+    cleaned = re.sub(r"[^A-Za-z0-9._-]", "_", name)[:120]
+    return cleaned or "avatar"

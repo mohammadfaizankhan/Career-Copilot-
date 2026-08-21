@@ -1,0 +1,201 @@
+
+from __future__ import annotations
+
+from typing import Any
+
+from app.agents.providers import GroqClient, NvidiaClient, preferred_llm_provider, preferred_llm_providers
+from app.core.config import Settings
+from app.features.learning.service import learning_agent_capability
+from app.features.resume_improvement.agents.crew import crew_capability, crew_runtime_mode
+
+AGENT_RESUME_IMPROVEMENT = "resume_improvement"
+AGENT_PROFILE_FILL = "profile_fill"
+AGENT_INTERVIEW_QUESTIONS = "interview_questions"
+AGENT_INTERVIEW_EVALUATION = "interview_evaluation"
+AGENT_ATS_IMPROVEMENT_BRIEF = "ats_improvement_brief"
+AGENT_RESUME_IMPROVEMENT_CREW = "resume_improvement_crew"
+AGENT_LEARNING_YOUTUBE_CREW = "learning_youtube_crew"
+AGENT_DOCUMENT_SECTION_EXTRACT = "document_section_extract"
+
+
+def _primary_model(settings: Settings, nvidia: dict[str, Any], groq: dict[str, Any]) -> str | None:
+    preferred = preferred_llm_provider(settings)
+    if preferred == "groq" and groq.get("configured"):
+        return groq.get("model")
+    if preferred == "nvidia" and nvidia.get("configured"):
+        return nvidia.get("model")
+    if groq.get("configured"):
+        return groq.get("model")
+    if nvidia.get("configured"):
+        return nvidia.get("model")
+    return None
+
+
+def list_agents(settings: Settings) -> list[dict[str, Any]]:
+    nvidia = NvidiaClient(settings).capability()
+    groq = GroqClient(settings).capability()
+    crew = crew_capability(settings)
+    learning = learning_agent_capability(settings)
+    preferred = preferred_llm_provider(settings)
+    ordered = preferred_llm_providers(settings)
+    any_llm = bool(ordered)
+    primary_model = _primary_model(settings, nvidia, groq)
+    return [
+        {
+            "id": AGENT_RESUME_IMPROVEMENT,
+            "name": "Resume improvement",
+            "description": "Evidence-checked resume rewrite suggestions for confirmed sections.",
+            "provider": preferred if any_llm else "none",
+            "provider_order": ordered,
+            "prompt": "improve_resume_v1.txt",
+            "configured": any_llm,
+            "ready": any_llm,
+            "model": primary_model,
+            "endpoint": "POST /api/v1/resume-improvements",
+            "fallback": "No generated suggestions are returned when all LLM attempts fail; the request is retryable.",
+            "orchestration": crew_runtime_mode(),
+        },
+        {
+            "id": AGENT_RESUME_IMPROVEMENT_CREW,
+            "name": crew["name"],
+            "description": (
+                "CrewAI-compatible sequential crew: ATS gap analyst → LLM improver "
+                f"(prefers {preferred}) → evidence validator. Tools never invent experience."
+            ),
+            "provider": preferred if any_llm else "none",
+            "provider_order": ordered,
+            "prompt": "improve_resume_v1.txt (+ crew tools)",
+            "configured": any_llm,
+            "ready": bool(crew.get("ready")),
+            "model": primary_model,
+            "endpoint": "POST /api/v1/resume-improvements",
+            "fallback": crew.get("official_crewai_note") or crew.get("truthfulness"),
+            "framework": crew.get("framework"),
+            "runtime": crew.get("runtime"),
+            "crew_agents": crew.get("agents"),
+            "crew_tasks": crew.get("tasks"),
+            "official_crewai_package": crew.get("official_crewai_package"),
+        },
+        {
+            "id": AGENT_PROFILE_FILL,
+            "name": "Profile fill from resume",
+            "description": "Extract profile fields from resume text (AI + deterministic merge).",
+            "provider": preferred if any_llm else "none",
+            "provider_order": ordered,
+            "prompt": "fill_profile_from_resume_v1.txt",
+            "configured": any_llm,
+            "ready": True,
+            "model": primary_model,
+            "endpoint": "POST /api/v1/profile/from-resume/preview",
+            "fallback": "No AI profile is returned when all LLM attempts fail; the request is retryable.",
+        },
+        {
+            "id": AGENT_INTERVIEW_QUESTIONS,
+            "name": "Interview question generation",
+            "description": "Generate mock-interview questions for a session.",
+            "provider": "groq",
+            "prompt": "interview_questions_v1.txt",
+            "configured": bool(groq.get("configured")),
+            "ready": True,
+            "model": groq.get("model") if groq.get("configured") else None,
+            "endpoint": "POST /api/v1/interviews/{session_id}/start",
+            "fallback": "No questions are returned when all configured LLM attempts fail; retry is required.",
+        },
+        {
+            "id": AGENT_INTERVIEW_EVALUATION,
+            "name": "Interview answer evaluation & debrief",
+            "description": (
+                "After each answer: interviewer feedback, strengths, better approach, filler-word "
+                "detection. On complete: full session report with Q&A review."
+            ),
+            "provider": "groq" if groq.get("configured") else "deterministic",
+            "prompt": "interview_answer_eval_v1.txt + interview_session_report_v1.txt",
+            "configured": True,
+            "ready": True,
+            "model": groq.get("model") if groq.get("configured") else None,
+            "endpoint": "POST /api/v1/interviews/{session_id}/responses | complete",
+            "fallback": "Measured transcript metrics remain available, but feedback/report generation requires an LLM.",
+        },
+        {
+            "id": AGENT_ATS_IMPROVEMENT_BRIEF,
+            "name": "ATS improvement brief",
+            "description": "Overall inference from missing ATS keywords only (no invented experience).",
+            "provider": preferred if any_llm else "none",
+            "provider_order": ordered,
+            "prompt": "ats_improvement_v1.txt",
+            "configured": any_llm,
+            "ready": True,
+            "model": primary_model,
+            "endpoint": "POST /api/v1/ats-analyses (summary.overall_inference)",
+            "fallback": "The evidence-only ATS score remains available, but narrative generation reports an explicit LLM failure.",
+        },
+        {
+            "id": AGENT_LEARNING_YOUTUBE_CREW,
+            "name": learning.get("name") or "Learning path multi-media crew",
+            "description": (
+                "CrewAI-compatible sequential crew: ATS gap analyst → curriculum planner (Groq) → "
+                "resource validator. Recommends free YouTube lessons plus blogs/articles/docs for "
+                "completed ATS gaps; never invents video IDs or article URLs."
+            ),
+            "provider": "groq",
+            "prompt": "learning_youtube_path_v1.txt (+ crew tools)",
+            "configured": bool(groq.get("configured")),
+            "ready": True,
+            "model": groq.get("model") if groq.get("configured") else None,
+            "endpoint": "POST /api/v1/learning-paths/generate",
+            "fallback": "No learning plan is materialized when the LLM planner fails; retry is required.",
+            "framework": learning.get("framework"),
+            "runtime": learning.get("runtime"),
+            "crew_agents": learning.get("agents"),
+            "crew_tasks": learning.get("tasks"),
+            "algorithm_version": learning.get("algorithm_version"),
+            "truthfulness": learning.get("truthfulness"),
+        },
+        {
+            "id": AGENT_DOCUMENT_SECTION_EXTRACT,
+            "name": "Document section segregation",
+            "description": (
+                "Segregates resume/JD plain text into source-true sections using one short LLM call. "
+                f"Prefers {preferred} (from LLM_PROVIDER); falls back to the other provider, then structural layout."
+            ),
+            "provider": preferred if any_llm else "none",
+            "provider_order": ordered,
+            "prompt": "document_section_extract_v1.txt",
+            "configured": any_llm or bool(getattr(settings, "groq_resume_parser_configured", False)),
+            "ready": True,
+            "model": primary_model,
+            "endpoint": "POST /api/v1/resumes, POST /api/v1/job-descriptions",
+            "fallback": "Structural parsing is retained only for document structure; generated semantic content requires an LLM.",
+        },
+    ]
+
+
+def agents_status(settings: Settings) -> dict[str, Any]:
+    agents = list_agents(settings)
+    nvidia = NvidiaClient(settings).capability()
+    groq = GroqClient(settings).capability()
+    preferred = preferred_llm_provider(settings)
+    ordered = preferred_llm_providers(settings)
+    ready_count = sum(1 for a in agents if a.get("ready"))
+    configured_llm_agents = sum(1 for a in agents if a.get("configured"))
+    return {
+        "status": "ok",
+        "agent_count": len(agents),
+        "ready_count": ready_count,
+        "llm_configured_agent_count": configured_llm_agents,
+        "preferred_provider": preferred,
+        "provider_order": ordered,
+        "providers": {
+            "nvidia": {
+                "configured": bool(nvidia.get("configured")),
+                "model": nvidia.get("model"),
+                "base_url": nvidia.get("base_url"),
+            },
+            "groq": {
+                "configured": bool(groq.get("configured")),
+                "model": groq.get("model"),
+                "base_url": groq.get("base_url"),
+            },
+        },
+        "agents": agents,
+    }

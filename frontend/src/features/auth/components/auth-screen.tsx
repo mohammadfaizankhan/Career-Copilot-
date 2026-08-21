@@ -1,0 +1,454 @@
+
+import { Link } from "@/shared/ui/router-link";
+import { useNavigate } from "react-router-dom";
+import { useSearchParams } from "@/shared/router";
+import { useState } from "react";
+import { Eye, MailCheck } from "lucide-react";
+
+
+import { createClient } from "@/features/auth/api/client";
+import { safeRedirectPath } from "@/features/auth/safe-path";
+import { Button, Input } from "@/shared/ui/primitives";
+import { ThemeToggle } from "@/shared/ui/theme-toggle";
+
+function Shell({ children, title, description }: { children: React.ReactNode; title: string; description: string }) {
+  return (
+    <main id="main-content" className="auth-shell atlas-auth-shell">
+      <aside className="auth-aside atlas-auth-aside" aria-label="Product overview">
+        <Link className="brand atlas-auth-brand" href="/">
+          Career Copilot
+        </Link>
+        <div className="auth-aside-copy">
+          <p className="eyebrow">Private career workspace</p>
+          <h1>{title}</h1>
+          <p>{description}</p>
+          <ul className="auth-aside-points">
+            <li>Review every score against evidence you control</li>
+            <li>Practice interviews with a live transcript</li>
+            <li>See roles matched to your confirmed profile</li>
+          </ul>
+        </div>
+        <p className="auth-aside-foot">Private by default · you review before reuse</p>
+      </aside>
+      <section className="auth-main atlas-auth-main">
+        <div className="auth-main-inner">
+          <div className="auth-theme-control atlas-auth-theme-control"><ThemeToggle compact /></div>
+          {children}
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function configurationError() {
+  return "Sign-in is not available right now. Please try again later.";
+}
+
+function authErrorMessage(message: string) {
+  const normalized = message.toLowerCase();
+  if (normalized.includes("email not confirmed")) {
+    return "Your email is not verified yet. Open the verification link from your inbox, then try signing in again.";
+  }
+  if (normalized.includes("invalid login credentials") || normalized.includes("email or password is incorrect")) {
+    return "The email or password is incorrect. If you just created the account, verify your email first.";
+  }
+  return message;
+}
+
+export function SignInScreen() {
+  const navigate = useNavigate();
+  const search = useSearchParams();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState(
+    search.get("error") === "configuration_required" ? configurationError() : "",
+  );
+  const [busy, setBusy] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [verificationMessage, setVerificationMessage] = useState("");
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+
+    const authClient = createClient();
+    if (!authClient) return setError(configurationError());
+    setBusy(true);
+    setError("");
+    setVerificationMessage("");
+    setNeedsVerification(false);
+    setShowPassword(false);
+    try {
+      const result = await authClient.auth.signInWithPassword({ email: email.trim(), password });
+      if (result.error) {
+        const normalized = result.error.message.toLowerCase();
+      setNeedsVerification(
+        normalized.includes("email not confirmed") ||
+          normalized.includes("email not verified") ||
+          normalized.includes("verify your email"),
+      );
+        return setError(authErrorMessage(result.error.message));
+      }
+      navigate(safeRedirectPath(search.get("next"), "/dashboard"));
+
+    } catch {
+      setError("Could not reach authentication. Check your connection and try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function resendVerification() {
+    const address = email.trim();
+    if (!address) return setError("Enter your email address first.");
+    const authClient = createClient();
+    if (!authClient) return setError(configurationError());
+    setBusy(true);
+    setError("");
+    setVerificationMessage("");
+    try {
+      const result = await authClient.auth.resend({
+        type: "signup",
+        email: address,
+        options: { emailRedirectTo: `${location.origin}/auth/callback?next=/onboarding` },
+      });
+      if (result.error) return setError(authErrorMessage(result.error.message));
+      setVerificationMessage("A new verification email was requested. Check spam or promotions too.");
+    } catch {
+      setError("Could not request a verification email. Check your connection and try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function oauth(provider: "google" | "linkedin_oidc") {
+    const authClient = createClient();
+    if (!authClient) return setError(configurationError());
+    try {
+      const next = safeRedirectPath(search.get("next"), "/dashboard");
+      const result = await authClient.auth.signInWithOAuth({
+        provider,
+        options: { redirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent(next)}` },
+      });
+      const oauthError = result.error;
+      if (oauthError) setError(authErrorMessage(oauthError.message));
+       else if (provider === "google" && result.data?.session) {
+         navigate(safeRedirectPath(search.get("next"), "/dashboard"));
+       }
+    } catch {
+      setError("Could not reach authentication. Check your connection and try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Shell title="Welcome back." description="Sign in to open your private career records and continue where you left off.">
+      <form className="auth-card panel stack atlas-auth-card" onSubmit={submit}>
+        <div className="atlas-auth-card-header">
+          <p className="eyebrow">Secure sign in</p>
+          <h1>Sign in</h1>
+        </div>
+        <label className="field-label">
+          Email
+          <Input type="email" autoComplete="email" required value={email} onChange={(e: any) => setEmail(e.target.value)} />
+        </label>
+        <label className="field-label">
+          Password
+          <div className="password-field">
+            <Input
+              type={showPassword ? "text" : "password"}
+              autoComplete="current-password"
+              required
+              value={password}
+              onChange={(e: any) => setPassword(e.target.value)}
+            />
+            <button
+              type="button"
+              className="password-reveal"
+              aria-label="Hold to show password"
+              title="Hold to show password"
+              tabIndex={-1}
+              onPointerDown={(e: any) => {
+                e.preventDefault();
+                setShowPassword(true);
+              }}
+              onPointerUp={() => setShowPassword(false)}
+              onPointerLeave={() => setShowPassword(false)}
+              onPointerCancel={() => setShowPassword(false)}
+              onContextMenu={(e: any) => e.preventDefault()}
+            >
+              <Eye size={18} aria-hidden />
+            </button>
+          </div>
+        </label>
+        {error && (
+          <p role="alert" className="field-error">
+            {error}
+          </p>
+        )}
+        {verificationMessage && <p role="status" className="badge badge-success">{verificationMessage}</p>}
+        {needsVerification && (
+          <Button type="button" variant="secondary" disabled={busy} onClick={resendVerification}>
+            Resend verification email
+          </Button>
+        )}
+        <Button disabled={busy} type="submit">
+          {busy ? "Signing in…" : "Sign in"}
+        </Button>
+        <div className="auth-divider">or</div>
+        <div className="auth-oauth">
+          <Button type="button" variant="secondary" disabled={busy} onClick={() => { setBusy(true); void oauth("google"); }}>
+            Continue with Google
+          </Button>
+        </div>
+        <p className="auth-switch">
+          New here?{" "}
+          <Link href="/sign-up">
+            Create an account
+          </Link>
+        </p>
+      </form>
+    </Shell>
+  );
+}
+
+export function SignUpScreen() {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [error, setError] = useState("");
+  const [sent, setSent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [resendMessage, setResendMessage] = useState("");
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (password !== confirm) return setError("Passwords do not match.");
+    const authClient = createClient();
+    if (!authClient) return setError(configurationError());
+    setBusy(true);
+    setError("");
+    try {
+      const result = await authClient.auth.signUp({
+        email: email.trim(),
+        password,
+        options: {
+          data: { full_name: name.trim() },
+          emailRedirectTo: `${location.origin}/auth/callback?next=/onboarding`,
+        },
+      });
+      if (result.error) return setError(authErrorMessage(result.error.message));
+      setSent(true);
+    } catch {
+      setError("Could not reach authentication. Check your connection and try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function resendVerification() {
+    const address = email.trim();
+    if (!address) return setError("Enter your email address first.");
+    const authClient = createClient();
+    if (!authClient) return setError(configurationError());
+    setBusy(true);
+    setError("");
+    setResendMessage("");
+    try {
+      const result = await authClient.auth.resend({
+        type: "signup",
+        email: address,
+        options: { emailRedirectTo: `${location.origin}/auth/callback?next=/onboarding` },
+      });
+      if (result.error) return setError(authErrorMessage(result.error.message));
+      setResendMessage("A new verification email was requested. Check spam or promotions too.");
+    } catch {
+      setError("Could not request a verification email. Check your connection and try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Shell
+      title="Create your account."
+      description="Your records stay private. Review what is saved before it powers another workflow."
+    >
+      {sent ? (
+        <div className="auth-card panel empty-state atlas-auth-card">
+          <MailCheck size={44} />
+          <h1>Check your inbox</h1>
+          <p>Open the verification link we sent to activate your account.</p>
+          {error && <p role="alert" className="field-error">{error}</p>}
+          {resendMessage && <p role="status" className="badge badge-success">{resendMessage}</p>}
+          <Button type="button" variant="secondary" disabled={busy} onClick={resendVerification}>
+            {busy ? "Requesting email…" : "Resend verification email"}
+          </Button>
+          <p className="muted">If it does not arrive, check spam or promotions folders, then try resending the verification email.</p>
+        </div>
+      ) : (
+        <form className="auth-card panel stack atlas-auth-card" onSubmit={submit}>
+          <div className="atlas-auth-card-header">
+            <p className="eyebrow">Create account</p>
+            <h1>Get started</h1>
+          </div>
+          <label className="field-label">
+            Full name
+            <Input required minLength={2} value={name} onChange={(e: any) => setName(e.target.value)} />
+          </label>
+          <label className="field-label">
+            Email
+            <Input type="email" required value={email} onChange={(e: any) => setEmail(e.target.value)} />
+          </label>
+          <label className="field-label">
+            Password
+            <Input
+              type="password"
+              autoComplete="new-password"
+              required
+              minLength={8}
+              value={password}
+              onChange={(e: any) => setPassword(e.target.value)}
+            />
+          </label>
+          <label className="field-label">
+            Confirm password
+            <Input
+              type="password"
+              autoComplete="new-password"
+              required
+              value={confirm}
+              onChange={(e: any) => setConfirm(e.target.value)}
+            />
+          </label>
+          {error && (
+            <p role="alert" className="field-error">
+              {error}
+            </p>
+          )}
+          <Button disabled={busy} type="submit">
+            {busy ? "Creating account…" : "Create account"}
+          </Button>
+          <p className="auth-switch">
+            Already registered?{" "}
+            <Link href="/sign-in">
+              Sign in
+            </Link>
+          </p>
+        </form>
+      )}
+    </Shell>
+  );
+}
+
+export function VerifyEmailScreen() {
+  return (
+    <Shell title="Confirm your email." description="We sent a verification link to finish setting up your account.">
+      <div className="auth-card panel empty-state atlas-auth-card">
+        <MailCheck size={44} />
+        <h1>Check your inbox</h1>
+        <p>Open the verification link to continue. If it expired, return to sign up and request a new message.</p>
+        <Link className="button button-secondary" href="/sign-in">
+          Back to sign in
+        </Link>
+      </div>
+    </Shell>
+  );
+}
+
+export function PasswordScreen({ reset = false }: { reset?: boolean }) {
+  const navigate = useNavigate();
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [error, setError] = useState("");
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    const authClient = createClient();
+    if (!authClient) return setError(configurationError());
+    setError("");
+    try {
+      if (!reset) return;
+      if (password !== confirm) return setError("Passwords do not match.");
+      if (!currentPassword.trim()) return setError("Enter your current password.");
+      const result = await authClient.auth.updateUser({
+        password,
+        current_password: currentPassword,
+      });
+      if (result.error) return setError(authErrorMessage(result.error.message));
+      navigate("/dashboard");
+    } catch {
+      setError("Could not reach authentication. Check your connection and try again.");
+    }
+  }
+  return (
+    <Shell
+      title={reset ? "Choose a new password." : "Reset your password."}
+      description={
+        reset
+          ? "Confirm your current password, then choose a new one."
+          : "Password recovery email is not configured for this deployment."
+      }
+    >
+      <form className="auth-card panel stack atlas-auth-card" onSubmit={submit}>
+        <div className="atlas-auth-card-header">
+          <p className="eyebrow">{reset ? "Account security" : "Account recovery"}</p>
+          <h1>{reset ? "Choose a new password" : "Reset your password"}</h1>
+        </div>
+        {reset ? (
+          <>
+            <label className="field-label">
+              Current password
+              <Input
+                type="password"
+                required
+                autoComplete="current-password"
+                value={currentPassword}
+                onChange={(e: any) => setCurrentPassword(e.target.value)}
+              />
+            </label>
+            <label className="field-label">
+              New password
+              <Input
+                type="password"
+                required
+                minLength={8}
+                autoComplete="new-password"
+                value={password}
+                onChange={(e: any) => setPassword(e.target.value)}
+              />
+            </label>
+            <label className="field-label">
+              Confirm password
+              <Input
+                type="password"
+                required
+                autoComplete="new-password"
+                value={confirm}
+                onChange={(e: any) => setConfirm(e.target.value)}
+              />
+            </label>
+          </>
+        ) : (
+          <p className="muted">
+            Password recovery email is not configured for this deployment. Sign in with your current password or
+            contact the workspace administrator.
+          </p>
+        )}
+        {error && (
+          <p role="alert" className="field-error">
+            {error}
+          </p>
+        )}
+        {reset ? (
+          <Button type="submit">Update password</Button>
+        ) : (
+          <p className="feature-status">
+            Recovery is not enabled for this deployment. <Link href="/sign-in">Return to sign in</Link> or contact your workspace administrator.
+          </p>
+        )}
+        {!reset && (
+          <p className="auth-switch">
+            Remembered it?{" "}
+            <Link href="/sign-in">Sign in</Link>
+          </p>
+        )}
+      </form>
+    </Shell>
+  );
+}
