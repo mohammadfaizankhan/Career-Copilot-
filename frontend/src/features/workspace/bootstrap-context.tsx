@@ -104,8 +104,7 @@ export function WorkspaceBootstrapProvider({ children }: { children: ReactNode }
     const gen = ++fetchGen.current;
     setLoading(true);
     setError("");
-    const bootstrapScope = pathname === "/dashboard" ? "full" : "shell";
-    apiRequest<WorkspaceBootstrap>(`/me/bootstrap?scope=${bootstrapScope}`)
+    apiRequest<WorkspaceBootstrap>("/me/bootstrap")
       .then((payload) => {
         if (gen !== fetchGen.current) return;
         setData(payload);
@@ -120,7 +119,7 @@ export function WorkspaceBootstrapProvider({ children }: { children: ReactNode }
       .finally(() => {
         if (gen === fetchGen.current) setLoading(false);
       });
-  }, [pathname]);
+  }, []);
 
   useEffect(() => {
     refresh();

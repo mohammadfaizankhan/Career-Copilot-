@@ -71,17 +71,3 @@ backend/.data/
 .vscode/
 *.swp
 *~
-
-# Local review/tooling artifacts and presentation exports
-.audit-baseline/
-.claude/
-agent/
-skills-lock.json
-scripts/_audit_api_sync_report.json
-Career-Copilot-Project-Presentation/
-Career-Copilot-Project-Presentation-*.png
-Career-Copilot-Project-Presentation*.pptx
-Career-Copilot-Project-Presentation*.ndjson
-atlas-*.png
-career-atlas-*.png
-landing-*.png

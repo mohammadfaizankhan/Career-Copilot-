@@ -2,18 +2,21 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Link } from "@/shared/ui/router-link";
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import {
+  BookOpenCheck,
+  BriefcaseBusiness,
   ChevronUp,
+  FileSearch,
+  Gauge,
   LogOut,
   Menu,
+  Mic2,
   PanelLeftClose,
   PanelLeftOpen,
   Settings,
   UserRound,
   X,
 } from "lucide-react";
-import { CareerIcon, type CareerIconName } from "@/components/ui/career-icons";
 import { ThemeToggle } from "@/shared/ui/theme-toggle";
-import { BrandMark } from "@/components/ui/brand-mark";
 import { routes } from "@/shared/routes";
 import { createClient } from "@/features/auth/api/client";
 import { ProfileCompletionToast } from "@/features/profile/components/profile-completion-toast";
@@ -33,11 +36,11 @@ import {
 
 /** Primary nav only — Settings lives in the profile account menu. */
 const navigation = [
-  { href: routes.dashboard, label: "Dashboard", icon: "dashboard" as CareerIconName },
-  { href: routes.resume, label: "Resume Analysis", icon: "resume" as CareerIconName },
-  { href: routes.interview, label: "Mock Interview", icon: "interview" as CareerIconName },
-  { href: routes.learning, label: "Learning Path", icon: "learning" as CareerIconName },
-  { href: routes.jobs, label: "Recommended Jobs", icon: "opportunities" as CareerIconName },
+  { href: routes.dashboard, label: "Dashboard", icon: Gauge },
+  { href: routes.resume, label: "Resume Analysis", icon: FileSearch },
+  { href: routes.interview, label: "Mock Interview", icon: Mic2 },
+  { href: routes.learning, label: "Learning Path", icon: BookOpenCheck },
+  { href: routes.jobs, label: "Recommended Jobs", icon: BriefcaseBusiness },
 ];
 
 function readDemoMode() {
@@ -200,7 +203,6 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
               onFocus={() => prefetchRoute(routes.dashboard)}
               aria-label="Career Copilot dashboard"
             >
-              <BrandMark compact />
               <span className="sidebar-brand-full">Career Copilot</span>
               <span className="sidebar-brand-short" aria-hidden="true">
                 CC
@@ -224,6 +226,7 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
 
           <nav className="sidebar-nav">
             {navigation.map((item) => {
+              const Icon = item.icon;
               const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
               return (
                 <Link
@@ -237,7 +240,7 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
                   title={item.label}
                 >
                   <span className="sidebar-link-icon" aria-hidden>
-                    <CareerIcon name={item.icon} size={18} />
+                    <Icon size={18} />
                   </span>
                   <span className="sidebar-link-label">{item.label}</span>
                 </Link>

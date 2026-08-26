@@ -35,7 +35,7 @@ const STAGES: SequenceStage[] = [
     verb: "Improve",
     title: "Grounded Resume Recommendations",
     description: "Receive exact, evidence-grounded revisions to present your true capabilities clearly.",
-    href: "/resume-analysis",
+    href: "/resume-analysis?tab=review",
     visualLabel: "Generating deterministic ATS & bullet refinements",
   },
   {

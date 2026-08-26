@@ -283,11 +283,7 @@ def auth_resend():
     raise ApiError(
         503,
         "email_delivery_not_configured",
-        (
-            "Verification emails are delivered by Supabase. If messages do not arrive, "
-            "resend from the app or configure custom SMTP under Supabase Dashboard "
-            "-> Authentication -> SMTP."
-        ),
+        "Email verification delivery is not configured. Sign in with the account credentials you created.",
     )
 
 
