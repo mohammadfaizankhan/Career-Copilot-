@@ -18,12 +18,11 @@ dependencies = [
   "pypdf>=5.3,<7",
   "python-docx>=1.1,<2",
   "reportlab>=4.2,<5",
-  "PyJWT[crypto]>=2.10,<3",
-  "firebase-admin>=6.7,<8"
+  "PyJWT[crypto]>=2.10,<3"
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8,<9", "ruff>=0.9,<1"]
+dev = ["ruff>=0.9,<1"]
 # Official CrewAI package (requires Python >=3.10,<3.14). On Python 3.14+ the
 # built-in CrewAI-compatible orchestrator is used automatically.
 # Install only on supported Python: pip install -e ".[crewai]"

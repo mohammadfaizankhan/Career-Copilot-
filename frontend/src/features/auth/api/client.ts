@@ -1,20 +1,13 @@
-﻿
-import {
+﻿import {
   ACCESS_TOKEN_STORAGE_KEY,
   resolveApiBase,
   isDemoCookiePresent,
 } from "@/shared/config";
-import {
-  completeGoogleRedirectSignIn,
-  emailPasswordAuthErrorMessage,
-  googleAuthErrorMessage,
-  signInWithEmailPassword,
-  signOutFromFirebase,
-  signInWithGoogle,
-} from "@/features/auth/firebase";
 import { supabaseAuthClient, SupabaseWebConfigError } from "@/features/auth/supabase";
+import { authCallbackUrl } from "@/features/auth/public-origin";
+import { APP_AUTH_TIMEOUT_MS, isTimeoutError, withTimeout } from "@/features/auth/api/timeout";
 
-type AuthError = { message: string } | null;
+type AuthError = { message: string; status?: number } | null;
 type AuthUser = {
   id: string;
   email: string;
@@ -32,6 +25,23 @@ function saveToken(value: string) {
   document.cookie = `career_copilot_demo=; Max-Age=0; Path=/; SameSite=Lax`;
 }
 
+function clearAccountClientState() {
+  if (typeof window === "undefined") return;
+  const keep = new Set(["career-copilot-theme", "career-copilot-motion-paused"]);
+  for (const store of [window.localStorage, window.sessionStorage]) {
+    const keys: string[] = [];
+    for (let index = 0; index < store.length; index += 1) {
+      const key = store.key(index);
+      if (!key || keep.has(key)) continue;
+      if (key.startsWith("career_copilot") || key.startsWith("career-copilot")) {
+        keys.push(key);
+      }
+    }
+    keys.forEach((key) => store.removeItem(key));
+  }
+  document.cookie = `career_copilot_session=; Max-Age=0; Path=/; SameSite=Lax`;
+}
+
 async function request(path: string, body?: unknown) {
   const accessToken = token();
   const endpoint = `${resolveApiBase()}${path}`;
@@ -47,34 +57,34 @@ async function request(path: string, body?: unknown) {
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
-    throw new Error(`Authentication server is unavailable at ${endpoint}. Start the backend API and try again.`);
+    const origin = typeof window === "undefined" ? "" : window.location.origin;
+    throw new Error(
+      `Authentication server is unavailable at ${endpoint}. If this is the deployed site, set Render FRONTEND_ORIGINS to ${origin || "your Vercel origin"} and redeploy the API.`,
+    );
   }
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     const message = payload?.error?.message || payload?.detail || `Authentication request failed (${response.status}).`;
     const code = payload?.error?.code ? ` [${payload.error.code}]` : "";
-    throw new Error(`${message}${code}`);
+    const error = new Error(`${message}${code}`) as Error & { status?: number };
+    error.status = response.status;
+    throw error;
   }
-  if (path !== "/auth/resend" && path !== "/auth/reset-password" && path !== "/auth/sign-out" && !payload?.access_token && path !== "/auth/session") {
+  if (
+    path !== "/auth/resend" &&
+    path !== "/auth/reset-password" &&
+    path !== "/auth/sign-out" &&
+    path !== "/auth/sign-up" &&
+    path !== "/auth/confirm-email" &&
+    path !== "/auth/session" &&
+    !payload?.access_token
+  ) {
     throw new Error("Authentication server returned an incomplete session. Please try again.");
   }
   return payload;
 }
 
 export function createClient() {
-  async function signInWithFirebaseIdToken(idToken: string) {
-    try {
-      const payload = await request("/auth/firebase", { id_token: idToken });
-      saveToken(payload.access_token);
-      return {
-        data: { session: { access_token: payload.access_token }, user: payload.user },
-        error: null as AuthError,
-      };
-    } catch (error) {
-      return { data: { session: null, user: null }, error: { message: (error as Error).message } };
-    }
-  }
-
   async function signInWithSupabaseAccessToken(accessToken: string) {
     try {
       const payload = await request("/auth/supabase", { access_token: accessToken });
@@ -82,41 +92,91 @@ export function createClient() {
       return {
         data: { session: { access_token: payload.access_token }, user: payload.user },
         error: null as AuthError,
+        emailConfirmed: false,
       };
     } catch (error) {
-      return { data: { session: null, user: null }, error: { message: (error as Error).message } };
+      return {
+        data: { session: null, user: null },
+        error: { message: (error as Error).message, status: (error as { status?: number }).status },
+        emailConfirmed: false,
+      };
     }
   }
 
   return {
     auth: {
-      async signInWithPassword({ email, password }: { email: string; password: string }) {
+      async signInWithPassword({ identifier, email, password }: { identifier?: string; email?: string; password: string }) {
+        const trimmed = (identifier ?? email ?? "").trim();
+        const isEmail = trimmed.includes("@");
+        let lastMessage = "The email or password is incorrect.";
+
+        // The application endpoint is the canonical identifier login path.
         try {
-          const result = await supabaseAuthClient().auth.signInWithPassword({ email: email.trim(), password });
-          if (!result.error && result.data.session?.access_token) {
-            return signInWithSupabaseAccessToken(result.data.session.access_token);
+          const payload = await withTimeout(
+            request("/auth/sign-in", { identifier: trimmed, password }),
+            "App sign-in",
+            APP_AUTH_TIMEOUT_MS,
+          );
+          saveToken(payload.access_token);
+          return {
+            data: { session: { access_token: payload.access_token }, user: payload.user },
+            error: null as AuthError,
+          };
+        } catch (error) {
+          if (!isTimeoutError(error) && error instanceof Error && error.message) lastMessage = error.message;
+          const status = (error as Error & { status?: number }).status;
+          if (status === 403 || lastMessage.toLowerCase().includes("not verified")) {
+            return {
+              data: { session: null, user: null },
+              error: { message: lastMessage, status },
+            };
           }
-          if (result.error) {
-            // Preserve existing Firebase and legacy app-password accounts during migration.
-            try {
-              const firebaseResult = await signInWithEmailPassword(email, password);
-              return signInWithFirebaseIdToken(firebaseResult.idToken);
-            } catch {
-              try {
-                const payload = await request("/auth/sign-in", { email, password });
-                saveToken(payload.access_token);
-                return {
-                  data: { session: { access_token: payload.access_token }, user: payload.user },
-                  error: null as AuthError,
-                };
-              } catch {
-                return { data: { session: null, user: null }, error: { message: result.error.message } };
-              }
+        }
+
+        if (isEmail) {
+          try {
+            const result = await withTimeout(
+              supabaseAuthClient().auth.signInWithPassword({ email: trimmed, password }),
+              "Supabase sign-in",
+              APP_AUTH_TIMEOUT_MS,
+            );
+            if (!result.error && result.data.session?.access_token) {
+              return await withTimeout(
+                signInWithSupabaseAccessToken(result.data.session.access_token),
+                "Supabase session exchange",
+                APP_AUTH_TIMEOUT_MS,
+              );
+            }
+            if (result.error?.message) lastMessage = result.error.message;
+          } catch (error) {
+            if (!(error instanceof SupabaseWebConfigError) && !isTimeoutError(error)) {
+              lastMessage = (error as Error).message || lastMessage;
             }
           }
-          return { data: { session: null, user: null }, error: { message: "Supabase did not return an authentication session." } };
+        }
+
+        try {
+          const payload = await withTimeout(
+            request("/auth/sign-in", { identifier: trimmed, password }),
+            "App sign-in",
+            APP_AUTH_TIMEOUT_MS,
+          );
+          saveToken(payload.access_token);
+          return {
+            data: { session: { access_token: payload.access_token }, user: payload.user },
+            error: null as AuthError,
+          };
         } catch (error) {
-          return { data: { session: null, user: null }, error: { message: error instanceof SupabaseWebConfigError ? error.message : emailPasswordAuthErrorMessage(error) } };
+          if (isTimeoutError(error)) {
+            return {
+              data: { session: null, user: null },
+              error: { message: "Authentication server is taking too long. Please check your connection and try again." },
+            };
+          }
+          return {
+            data: { session: null, user: null },
+            error: { message: error instanceof Error && error.message ? error.message : lastMessage },
+          };
         }
       },
       async signUp({
@@ -126,26 +186,125 @@ export function createClient() {
       }: {
         email: string;
         password: string;
-        options?: { data?: Record<string, unknown>; emailRedirectTo?: string };
+        options?: { data?: Record<string, unknown>; emailRedirectTo?: string; phone?: string };
       }) {
+        const trimmed = email.trim();
+        const phone = String(options?.phone || "").trim();
+        const appBody = {
+          email: trimmed,
+          password,
+          full_name: String(options?.data?.full_name || ""),
+          ...(options?.data?.username ? { username: String(options.data.username) } : {}),
+          ...(phone ? { phone } : {}),
+        };
+
+        const confirmationRedirect = options?.emailRedirectTo || authCallbackUrl("/sign-in");
+        const inboxResult = {
+          data: { session: null, user: null },
+          error: null as AuthError,
+          emailConfirmationSent: true,
+        };
+
         try {
-          const result = await supabaseAuthClient().auth.signUp({
-            email: email.trim(),
-            password,
-            options: {
-              data: { full_name: String(options?.data?.full_name || "") },
-              emailRedirectTo: options?.emailRedirectTo,
-            },
-          });
-          if (result.error) return { data: { session: null, user: null }, error: { message: result.error.message } };
-          return { data: { session: null, user: null }, error: null as AuthError };
+          const result = await withTimeout(
+            supabaseAuthClient().auth.signUp({
+              email: trimmed,
+              password,
+              options: {
+                data: {
+                  full_name: String(options?.data?.full_name || ""),
+                  ...(options?.data?.username ? { username: String(options.data.username) } : {}),
+                  ...(phone ? { phone } : {}),
+                },
+                emailRedirectTo: confirmationRedirect,
+              },
+            }),
+            "Supabase sign-up",
+            APP_AUTH_TIMEOUT_MS,
+          );
+          if (result.error) {
+            const message = result.error.message || "Sign-up failed.";
+            const already = /already registered|already exists|already been registered/i.test(message);
+            if (!already) {
+              return {
+                data: { session: null, user: null },
+                error: { message, status: result.error.status },
+                emailConfirmationSent: false,
+              };
+            }
+          }
+          const supabaseUser = result.data.user;
+          const identities = (supabaseUser as { identities?: unknown[] } | null)?.identities;
+          if (Array.isArray(identities) && identities.length === 0) {
+            return {
+              data: { session: null, user: null },
+              error: {
+                message: "An account with this email already exists. Sign in instead.",
+                status: 409,
+              },
+              emailConfirmationSent: false,
+            };
+          }
+          try {
+            await withTimeout(
+              request("/auth/sign-up", {
+                ...appBody,
+                ...(supabaseUser?.id ? { supabase_uid: supabaseUser.id } : {}),
+              }),
+              "App sign-up",
+              APP_AUTH_TIMEOUT_MS,
+            );
+          } catch (error) {
+            const status = (error as Error & { status?: number }).status;
+            const message = error instanceof Error ? error.message : "Sign-up failed.";
+            if (message.includes("[username_taken]") || /username is already taken/i.test(message)) {
+              return {
+                data: { session: null, user: null },
+                error: { message: "That username is already taken.", status: 409 },
+                emailConfirmationSent: false,
+              };
+            }
+            if (status !== 409) {
+              return {
+                data: { session: null, user: null },
+                error: { message, status },
+                emailConfirmationSent: false,
+              };
+            }
+          }
+          if (result.data.session?.access_token) {
+            try {
+              await supabaseAuthClient().auth.signOut();
+            } catch {
+              // Confirmation is still required before sign-in.
+            }
+          }
+          return inboxResult;
         } catch (error) {
-          return { data: { session: null, user: null }, error: { message: error instanceof SupabaseWebConfigError ? error.message : emailPasswordAuthErrorMessage(error) } };
+          return {
+            data: { session: null, user: null },
+            error: {
+              message: error instanceof Error ? error.message : "Sign-up failed.",
+              status: (error as Error & { status?: number }).status,
+            },
+            emailConfirmationSent: false,
+          };
         }
       },
-      async resend({ email }: { type: string; email: string; options?: unknown }) {
+      async resend({
+        email,
+        options,
+      }: {
+        type: string;
+        email: string;
+        options?: { emailRedirectTo?: string };
+      }) {
         try {
-          const result = await supabaseAuthClient().auth.resend({ type: "signup", email });
+          const result = await supabaseAuthClient().auth.resend({
+            type: "signup",
+            email,
+            options: options?.emailRedirectTo ? { emailRedirectTo: options.emailRedirectTo } : undefined,
+          });
           return result.error ? { error: { message: result.error.message } } : { error: null as AuthError };
         } catch (error) {
           return { error: { message: error instanceof SupabaseWebConfigError ? error.message : (error as Error).message } };
@@ -153,34 +312,23 @@ export function createClient() {
       },
       async signInWithOAuth({ provider, options }: { provider: string; options?: { redirectTo?: string } }) {
         if (provider !== "google") {
-          return { error: { message: "Only Google sign-in is configured for local development." } };
+          return { error: { message: "Only Google sign-in is configured for authentication." } };
         }
         try {
-          // Firebase returns to the URL that initiated the redirect. Move the
-          // SPA to the callback route before starting it so the redirect path
-          // can exchange the returned Firebase identity for the app JWT.
-          if (options?.redirectTo) {
-            const target = new URL(options.redirectTo, window.location.origin);
-            window.history.replaceState({}, "", `${target.pathname}${target.search}`);
-          }
-          const result = await signInWithGoogle();
-          if (!result) return { data: { session: null, user: null }, error: null as AuthError };
-          return signInWithFirebaseIdToken(result.idToken);
+          const redirectTo = options?.redirectTo
+            ? new URL(options.redirectTo, window.location.origin).toString()
+            : authCallbackUrl("/onboarding");
+          const { error } = await supabaseAuthClient().auth.signInWithOAuth({
+            provider: "google",
+            options: {
+              redirectTo,
+            },
+          });
+          if (error) throw error;
+          return { data: { session: null, user: null }, error: null as AuthError };
         } catch (error) {
-          return { data: { session: null, user: null }, error: { message: googleAuthErrorMessage(error) } };
+          return { data: { session: null, user: null }, error: { message: (error as Error).message } };
         }
-      },
-      async completeGoogleRedirect() {
-        try {
-          const result = await completeGoogleRedirectSignIn();
-          if (!result) return { data: { session: null, user: null }, error: null as AuthError };
-          return signInWithFirebaseIdToken(result.idToken);
-        } catch (error) {
-          return { data: { session: null, user: null }, error: { message: googleAuthErrorMessage(error) } };
-        }
-      },
-      async signInWithFirebaseIdToken(idToken: string) {
-        return signInWithFirebaseIdToken(idToken);
       },
       async getSession() {
         const value = token();
@@ -200,7 +348,8 @@ export function createClient() {
           const payload = await request("/auth/session");
           return { data: { user: payload.user as AuthUser }, error: null as AuthError };
         } catch (error) {
-          return { data: { user: null }, error: { message: (error as Error).message } };
+          const status = (error as { status?: number }).status;
+          return { data: { user: null }, error: { message: (error as Error).message, status } };
         }
       },
       async updateUser({
@@ -228,20 +377,67 @@ export function createClient() {
       },
       async completeAuthRedirect() {
         try {
-          const { data } = await supabaseAuthClient().auth.getSession();
+          const client = supabaseAuthClient();
+          const url = new URL(window.location.href);
+          const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+          const type = (hashParams.get("type") || url.searchParams.get("type") || "").toLowerCase();
+          const next = url.searchParams.get("next") || "";
+          const code = url.searchParams.get("code");
+          let { data } = await client.auth.getSession();
+          if (!data.session?.access_token && code) {
+            const exchanged = await client.auth.exchangeCodeForSession(code);
+            if (!exchanged.error) {
+              data = (await client.auth.getSession()).data;
+            }
+          }
+          if (!data.session?.access_token) {
+            const accessToken = hashParams.get("access_token") || "";
+            const refreshToken = hashParams.get("refresh_token") || "";
+            if (accessToken && refreshToken) {
+              const applied = await client.auth.setSession({
+                access_token: accessToken,
+                refresh_token: refreshToken,
+              });
+              if (!applied.error) {
+                data = (await client.auth.getSession()).data;
+              }
+            }
+          }
+          const emailConfirm =
+            type === "signup" ||
+            type === "email" ||
+            type === "email_change" ||
+            next === "/sign-in";
+          if (emailConfirm) {
+            const accessToken = data.session?.access_token;
+            if (accessToken) {
+              await request("/auth/confirm-email", { access_token: accessToken }).catch(() => undefined);
+            }
+            await client.auth.signOut().catch(() => undefined);
+            window.localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+            return {
+              data: { session: null, user: null },
+              error: null as AuthError,
+              emailConfirmed: Boolean(accessToken || type === "signup" || type === "email"),
+            };
+          }
           if (data.session?.access_token) return signInWithSupabaseAccessToken(data.session.access_token);
-        } catch {
-          // If there is no Supabase session, complete the Firebase Google flow.
+        } catch (error) {
+          return {
+            data: { session: null, user: null },
+            error: { message: (error as Error).message },
+            emailConfirmed: false,
+          };
         }
-        return this.completeGoogleRedirect();
+        return { data: { session: null, user: null }, error: null as AuthError, emailConfirmed: false };
       },
       async signOut() {
         window.localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
-        await signOutFromFirebase().catch(() => undefined);
+        clearAccountClientState();
         try {
           await supabaseAuthClient().auth.signOut();
         } catch {
-          // Supabase configuration is optional for Firebase Google sign-out.
+          // Supabase sign-out is best-effort if offline
         }
         if (isDemoCookiePresent()) return { error: null as AuthError };
         await request("/auth/sign-out").catch(() => undefined);
@@ -249,4 +445,8 @@ export function createClient() {
       },
     },
   };
+}
+
+export function isDefinitiveSessionRejection(error: { status?: number } | null | undefined): boolean {
+  return error?.status === 401 || error?.status === 403;
 }

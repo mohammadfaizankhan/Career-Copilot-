@@ -79,9 +79,9 @@ def candidate_skill_evidence(client, user_id: str, resume: dict[str, Any], versi
             if token.strip()
         )
     # Profile skills may boost only when grounded in confirmed resume text.
-    rows = client.table("candidate_skills").select("name,normalized_name").eq("user_id", user_id).execute().data or []
+    rows = client.table("candidate_skills").select("name").eq("user_id", user_id).execute().data or []
     for row in rows:
-        name = _normal(str(row.get("normalized_name") or row.get("name") or ""))
+        name = _normal(str(row.get("name") or ""))
         if name and _phrase_present(name, evidence_text):
             explicit.add(name)
     return {item for item in explicit if item}, evidence_text
@@ -98,8 +98,8 @@ def _requirements(job: dict[str, Any]) -> list[str]:
     if not isinstance(value, list):
         value = []
     items = [str(item).strip() for item in value if str(item).strip()]
-    # Fallback: pull tech-looking tokens from description when requirements empty
-    # (common for Adzuna-synced jobs that only store free-text description).
+    # Fallback: pull tech-looking tokens from free-text job descriptions when
+    # structured requirements are unavailable.
     if not items:
         description = str(job.get("description") or "")
         if description:

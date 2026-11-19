@@ -1,22 +1,16 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { Link } from "@/shared/ui/router-link";
-import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import {
-  BookOpenCheck,
-  BriefcaseBusiness,
-  ChevronUp,
-  FileSearch,
-  Gauge,
-  LogOut,
-  Menu,
-  Mic2,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Settings,
-  UserRound,
-  X,
-} from "lucide-react";
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import { CopilotIcon, type CopilotIconName } from "@/components/ui/copilot-icons";
+import { Breadcrumb5 } from "@/components/breadcrumb-5";
 import { ThemeToggle } from "@/shared/ui/theme-toggle";
+import { BrandMark } from "@/components/ui/brand-mark";
 import { routes } from "@/shared/routes";
 import { createClient } from "@/features/auth/api/client";
 import { ProfileCompletionToast } from "@/features/profile/components/profile-completion-toast";
@@ -28,19 +22,63 @@ import {
 } from "@/features/profile/model/profile-completion";
 import { isDemoSession } from "@/features/auth/demo-session";
 import { DEMO_COOKIE_NAME } from "@/shared/config";
-import { prefetchRoute } from "@/shared/route-prefetch";
+import { prefetchRoute, prefetchWorkspace } from "@/shared/route-prefetch";
 import {
   completionFromBootstrap,
   useWorkspaceBootstrap,
 } from "@/features/workspace/bootstrap-context";
+import {
+  AnimatePresence,
+  LayoutGroup,
+  MotionConfig,
+  motion,
+  useReducedMotion,
+} from "motion/react";
+import {
+  FLUID_SPRING_TRANSITION,
+  dropdownMenuVariants,
+  pageTransitionVariants,
+  springs,
+} from "@/components/ui/motion-system";
 
 /** Primary nav only — Settings lives in the profile account menu. */
 const navigation = [
-  { href: routes.dashboard, label: "Dashboard", icon: Gauge },
-  { href: routes.resume, label: "Resume Analysis", icon: FileSearch },
-  { href: routes.interview, label: "Mock Interview", icon: Mic2 },
-  { href: routes.learning, label: "Learning Path", icon: BookOpenCheck },
-  { href: routes.jobs, label: "Recommended Jobs", icon: BriefcaseBusiness },
+  {
+    href: routes.dashboard,
+    label: "Dashboard",
+    shortLabel: "Home",
+    icon: "dashboard" as CopilotIconName,
+  },
+  {
+    href: routes.resume,
+    label: "Resume Analysis",
+    shortLabel: "Resume",
+    icon: "resume" as CopilotIconName,
+  },
+  {
+    href: routes.interview,
+    label: "Mock Interview",
+    shortLabel: "Interview",
+    icon: "interview" as CopilotIconName,
+  },
+  {
+    href: routes.learning,
+    label: "Learning Path",
+    shortLabel: "Learn",
+    icon: "learning" as CopilotIconName,
+  },
+  {
+    href: routes.jobs,
+    label: "Recommended Jobs",
+    shortLabel: "Jobs",
+    icon: "jobs" as CopilotIconName,
+  },
+  {
+    href: routes.community,
+    label: "Community",
+    shortLabel: "People",
+    icon: "community" as CopilotIconName,
+  },
 ];
 
 function readDemoMode() {
@@ -54,13 +92,16 @@ function subscribeDemoMode() {
 export function WorkspaceShell({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
+  const reduceMotion = useReducedMotion();
   const { data: bootstrap } = useWorkspaceBootstrap();
-  const [open, setOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
-  const demoMode = useSyncExternalStore(subscribeDemoMode, readDemoMode, () => false);
+  const demoMode = useSyncExternalStore(
+    subscribeDemoMode,
+    readDemoMode,
+    () => false,
+  );
   const [liveCompletion, setLiveCompletion] = useState<{
     completion: number;
     missing: ProfileMissingItem[];
@@ -76,7 +117,8 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
       if (live) setLiveCompletion(live);
     }
     window.addEventListener(PROFILE_UPDATED_EVENT, onProfileUpdated);
-    return () => window.removeEventListener(PROFILE_UPDATED_EVENT, onProfileUpdated);
+    return () =>
+      window.removeEventListener(PROFILE_UPDATED_EVENT, onProfileUpdated);
   }, []);
 
   // Clear optimistic overlay when shared bootstrap catches up.
@@ -85,23 +127,8 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
   }, [bootstrap]);
 
   useEffect(() => {
-    document.body.style.overflow = open ? "hidden" : "";
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setOpen(false);
-        setProfileMenuOpen(false);
-      }
-    }
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open]);
+    prefetchWorkspace();
+  }, []);
 
   useEffect(() => {
     if (!profileMenuOpen) return;
@@ -150,18 +177,23 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
     .slice(0, 2)
     .toUpperCase();
   const profileAvatarUrl = bootstrap?.profile?.avatar_url || null;
-  const avatarUrl = profileAvatarUrl && profileAvatarUrl !== failedAvatarUrl ? profileAvatarUrl : null;
+  const avatarUrl =
+    profileAvatarUrl && profileAvatarUrl !== failedAvatarUrl
+      ? profileAvatarUrl
+      : null;
   const fromBootstrap = completionFromBootstrap(bootstrap);
   const completion = liveCompletion?.completion ?? fromBootstrap.completion;
-  const missing: ProfileMissingItem[] = liveCompletion?.missing ?? fromBootstrap.missing;
+  const missing: ProfileMissingItem[] =
+    liveCompletion?.missing ?? fromBootstrap.missing;
   const showCompletionPercent = completion < 100;
   const activeNav =
-    navigation.find((item) => pathname === item.href || pathname.startsWith(`${item.href}/`))?.label ||
+    navigation.find(
+      (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
+    )?.label ||
     (pathname.startsWith("/settings") ? "Settings" : "Workspace");
 
   function closeMenus() {
     setProfileMenuOpen(false);
-    setOpen(false);
   }
 
   async function logout() {
@@ -179,70 +211,52 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className={`workspace ${collapsed ? "sidebar-collapsed" : ""}`}>
-      {open ? (
-        <button
-          type="button"
-          className="sidebar-backdrop"
-          aria-label="Close navigation"
-          onClick={() => {
-            setOpen(false);
-            setProfileMenuOpen(false);
-          }}
-        />
-      ) : null}
-
-      <aside className={`sidebar ${open ? "open" : ""}`} aria-label="Workspace navigation">
+    <MotionConfig transition={reduceMotion ? { duration: 0 } : springs.fluid} reducedMotion="user">
+    <LayoutGroup>
+    <div className="workspace">
+      <aside className="sidebar" aria-label="Workspace navigation">
         <div className="sidebar-top">
           <div className="row sidebar-header">
             <Link
               className="brand"
               href={routes.dashboard}
-              onClick={() => setOpen(false)}
               onMouseEnter={() => prefetchRoute(routes.dashboard)}
               onFocus={() => prefetchRoute(routes.dashboard)}
               aria-label="Career Copilot dashboard"
             >
+              <BrandMark compact />
               <span className="sidebar-brand-full">Career Copilot</span>
-              <span className="sidebar-brand-short" aria-hidden="true">
-                CC
-              </span>
             </Link>
-            <button
-              type="button"
-              className="icon-button sidebar-collapse-button"
-              onClick={() => setCollapsed((current) => !current)}
-              aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
-              aria-expanded={!collapsed}
-            >
-              {collapsed ? <PanelLeftOpen size={18} aria-hidden /> : <PanelLeftClose size={18} aria-hidden />}
-            </button>
-            {open ? (
-              <button type="button" className="icon-button" onClick={() => setOpen(false)} aria-label="Close navigation">
-                <X size={18} aria-hidden />
-              </button>
-            ) : null}
           </div>
 
           <nav className="sidebar-nav">
             {navigation.map((item) => {
-              const Icon = item.icon;
-              const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+              const active =
+                pathname === item.href || pathname.startsWith(`${item.href}/`);
               return (
                 <Link
                   key={item.href}
                   href={item.href}
-                  onClick={() => setOpen(false)}
                   onMouseEnter={() => prefetchRoute(item.href)}
                   onFocus={() => prefetchRoute(item.href)}
                   className={`sidebar-link ${active ? "active" : ""}`}
                   aria-current={active ? "page" : undefined}
                   title={item.label}
+                  style={{ position: "relative" }}
                 >
-                  <span className="sidebar-link-icon" aria-hidden>
-                    <Icon size={18} />
+                  {active ? (
+                    <motion.span
+                      layoutId="sidebar-active-indicator"
+                      className="sidebar-active-pill"
+                      transition={
+                        reduceMotion ? { duration: 0 } : FLUID_SPRING_TRANSITION
+                      }
+                    />
+                  ) : null}
+                  <span className="sidebar-link-icon" style={{ position: "relative", zIndex: 1 }} aria-hidden>
+                    <CopilotIcon name={item.icon} size={18} />
                   </span>
-                  <span className="sidebar-link-label">{item.label}</span>
+                  <span className="sidebar-link-label" style={{ position: "relative", zIndex: 1 }}>{item.label}</span>
                 </Link>
               );
             })}
@@ -252,87 +266,107 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
         <div className="sidebar-footer">
           <div className="sidebar-profile-menu-wrap" ref={profileMenuRef}>
             {/* Menu sits above the trigger in normal flow so it is never clipped by absolute positioning. */}
-            {profileMenuOpen ? (
-              <div
-                id={profileMenuId}
-                className="sidebar-account-menu"
-                role="menu"
-                aria-label="Account options"
-              >
-                <div className="sidebar-account-menu-head">
-                  <span className="sidebar-profile-avatar sidebar-account-menu-avatar" aria-hidden>
-                    {avatarUrl ? (
-                      <img
-                        src={avatarUrl}
-                        alt=""
-                        className="avatar-image"
-                        onError={() => setFailedAvatarUrl(avatarUrl)}
-                      />
-                    ) : (
-                      initials
-                    )}
-                  </span>
-                  <div className="sidebar-account-menu-identity">
-                    <p className="sidebar-account-menu-name">{fullName}</p>
-                    {showCompletionPercent ? (
-                      <>
-                        <p className="sidebar-account-menu-sub">{completion}% complete</p>
-                        <div
-                          className="sidebar-account-menu-progress"
-                          role="progressbar"
-                          aria-valuenow={completion}
-                          aria-valuemin={0}
-                          aria-valuemax={100}
-                          aria-label="Profile completion"
-                        >
-                          <span style={{ width: `${Math.max(0, Math.min(100, completion))}%` }} />
-                        </div>
-                      </>
-                    ) : (
-                      <p className="sidebar-account-menu-sub">Profile complete</p>
-                    )}
+            <AnimatePresence>
+              {profileMenuOpen ? (
+                <motion.div
+                  id={profileMenuId}
+                  className="sidebar-account-menu"
+                  role="menu"
+                  aria-label="Account options"
+                  variants={dropdownMenuVariants}
+                  initial={reduceMotion ? false : "initial"}
+                  animate="animate"
+                  exit="exit"
+                >
+                  <div className="sidebar-account-menu-head">
+                    <span
+                      className="sidebar-profile-avatar sidebar-account-menu-avatar"
+                      aria-hidden
+                    >
+                      {avatarUrl ? (
+                        <img
+                          src={avatarUrl}
+                          alt=""
+                          className="avatar-image"
+                          onError={() => setFailedAvatarUrl(avatarUrl)}
+                        />
+                      ) : (
+                        initials
+                      )}
+                    </span>
+                    <div className="sidebar-account-menu-identity">
+                      <p className="sidebar-account-menu-name">{fullName}</p>
+                      {showCompletionPercent ? (
+                        <>
+                          <p className="sidebar-account-menu-sub">
+                            {completion}% complete
+                          </p>
+                          <div
+                            className="sidebar-account-menu-progress"
+                            role="progressbar"
+                            aria-valuenow={completion}
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            aria-label="Profile completion"
+                          >
+                            <span
+                              style={{
+                                width: `${Math.max(0, Math.min(100, completion))}%`,
+                              }}
+                            />
+                          </div>
+                        </>
+                      ) : (
+                        <p className="sidebar-account-menu-sub">
+                          Profile complete
+                        </p>
+                      )}
+                    </div>
                   </div>
-                </div>
 
-                <div className="sidebar-account-menu-actions" role="none">
-                  <div className="sidebar-account-menu-item theme-menu-item" role="none">
-                    <ThemeToggle />
+                  <div className="sidebar-account-menu-actions" role="none">
+                    <div
+                      className="sidebar-account-menu-item theme-menu-item"
+                      role="none"
+                    >
+                      <ThemeToggle />
+                    </div>
+                    <Link
+                      href="/settings/profile"
+                      className="sidebar-account-menu-item"
+                      role="menuitem"
+                      onClick={closeMenus}
+                      onMouseEnter={() => prefetchRoute("/settings/profile")}
+                      onFocus={() => prefetchRoute("/settings/profile")}
+                    >
+                      <CopilotIcon name="account" size={16} />
+                      View profile
+                    </Link>
+                    <Link
+                      href="/settings/account"
+                      className="sidebar-account-menu-item"
+                      role="menuitem"
+                      onClick={closeMenus}
+                      onMouseEnter={() => prefetchRoute("/settings/account")}
+                      onFocus={() => prefetchRoute("/settings/account")}
+                    >
+                      <CopilotIcon name="settings" size={16} />
+                      Settings
+                    </Link>
+                    <button
+                      type="button"
+                      className="sidebar-account-menu-item is-danger"
+                      role="menuitem"
+                      disabled={loggingOut}
+                      onClick={() => void logout()}
+                    >
+                      <CopilotIcon name="logout" size={16} />
+                      {loggingOut ? "Signing out…" : "Logout"}
+                    </button>
                   </div>
-                  <Link
-                    href="/settings/profile"
-                    className="sidebar-account-menu-item"
-                    role="menuitem"
-                    onClick={closeMenus}
-                    onMouseEnter={() => prefetchRoute("/settings/profile")}
-                    onFocus={() => prefetchRoute("/settings/profile")}
-                  >
-                    <UserRound size={16} aria-hidden />
-                    View profile
-                  </Link>
-                  <Link
-                    href="/settings/account"
-                    className="sidebar-account-menu-item"
-                    role="menuitem"
-                    onClick={closeMenus}
-                    onMouseEnter={() => prefetchRoute("/settings/account")}
-                    onFocus={() => prefetchRoute("/settings/account")}
-                  >
-                    <Settings size={16} aria-hidden />
-                    Settings
-                  </Link>
-                  <button
-                    type="button"
-                    className="sidebar-account-menu-item is-danger"
-                    role="menuitem"
-                    disabled={loggingOut}
-                    onClick={() => void logout()}
-                  >
-                    <LogOut size={16} aria-hidden />
-                    {loggingOut ? "Signing out…" : "Logout"}
-                  </button>
-                </div>
-              </div>
-            ) : null}
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
 
             <button
               type="button"
@@ -361,15 +395,17 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
               <span className="sidebar-profile-meta">
                 <span className="sidebar-profile-name">{firstName}</span>
                 {showCompletionPercent ? (
-                  <span className="sidebar-profile-sub">{completion}% complete</span>
+                  <span className="sidebar-profile-sub">
+                    {completion}% complete
+                  </span>
                 ) : (
                   <span className="sidebar-profile-sub">Account</span>
                 )}
               </span>
-              <ChevronUp
+              <CopilotIcon
+                name="collapse"
                 className={`sidebar-profile-caret ${profileMenuOpen ? "is-open" : ""}`}
                 size={16}
-                aria-hidden
               />
             </button>
           </div>
@@ -379,31 +415,91 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
       <div className="workspace-main">
         <header className="app-header">
           <div className="app-header-left">
-            <button
-              type="button"
-              className="icon-button mobile-sidebar-button"
-              onClick={() => setOpen(true)}
-              aria-label="Open navigation"
-              aria-expanded={open}
-            >
-              <Menu size={18} aria-hidden />
-            </button>
             <div className="app-header-titles">
               <strong className="app-header-title">{activeNav}</strong>
-              <span className="app-header-kicker">Career workspace</span>
+              <div className="app-header-breadcrumb-wrap mt-0.5">
+                <Breadcrumb5 className="app-header-breadcrumb" />
+              </div>
             </div>
           </div>
 
           <div className="app-header-actions">
-            {demoMode ? <span className="demo-banner">Demo · no account data</span> : null}
+            {demoMode ? (
+              <span className="demo-banner">Demo · no account data</span>
+            ) : null}
           </div>
         </header>
 
         <main id="main-content" className="workspace-content">
-          {children}
+          <motion.div
+            key={pathname}
+            className="workspace-page"
+            variants={pageTransitionVariants}
+            initial={reduceMotion ? false : "initial"}
+            animate="animate"
+          >
+            {children}
+          </motion.div>
         </main>
         <ProfileCompletionToast completion={completion} missing={missing} />
       </div>
+
+      <nav className="mobile-bottom-nav" aria-label="Primary">
+        {navigation.map((item) => {
+          const active =
+            pathname === item.href || pathname.startsWith(`${item.href}/`);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              onMouseEnter={() => prefetchRoute(item.href)}
+              onFocus={() => prefetchRoute(item.href)}
+              className={active ? "active" : ""}
+              aria-label={item.label}
+              aria-current={active ? "page" : undefined}
+              style={{ position: "relative" }}
+            >
+              {active ? (
+                <motion.span
+                  layoutId="mobile-nav-active-pill"
+                  className="mobile-nav-active-pill"
+                  transition={
+                    reduceMotion ? { duration: 0 } : FLUID_SPRING_TRANSITION
+                  }
+                />
+              ) : null}
+              <span className="mobile-bottom-nav-icon" style={{ position: "relative", zIndex: 1 }} aria-hidden>
+                <CopilotIcon name={item.icon} size={20} />
+              </span>
+              <span className="mobile-bottom-nav-label" style={{ position: "relative", zIndex: 1 }}>{item.shortLabel}</span>
+            </Link>
+          );
+        })}
+        <Link
+          href="/settings/profile"
+          onMouseEnter={() => prefetchRoute("/settings/profile")}
+          onFocus={() => prefetchRoute("/settings/profile")}
+          className={pathname.startsWith("/settings") ? "active" : ""}
+          aria-current={pathname.startsWith("/settings") ? "page" : undefined}
+          style={{ position: "relative" }}
+        >
+          {pathname.startsWith("/settings") ? (
+            <motion.span
+              layoutId="mobile-nav-active-pill"
+              className="mobile-nav-active-pill"
+              transition={
+                reduceMotion ? { duration: 0 } : FLUID_SPRING_TRANSITION
+              }
+            />
+          ) : null}
+          <span className="mobile-bottom-nav-icon" style={{ position: "relative", zIndex: 1 }} aria-hidden>
+            <CopilotIcon name="settings" size={20} />
+          </span>
+          <span className="mobile-bottom-nav-label" style={{ position: "relative", zIndex: 1 }}>Profile</span>
+        </Link>
+      </nav>
     </div>
+    </LayoutGroup>
+    </MotionConfig>
   );
 }

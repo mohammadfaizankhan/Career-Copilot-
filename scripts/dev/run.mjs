@@ -1,4 +1,5 @@
-import { spawn, spawnSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
+import { createConnection } from "node:net";
 import { resolve } from "node:path";
 import { ensureBackendVenv } from "../shared/backend-venv.mjs";
 import { loadRootEnv } from "../shared/load-env.mjs";
@@ -13,31 +14,137 @@ const frontendDirectory = resolve(process.cwd(), "frontend");
 // that local browsers use. FRONTEND_HOST remains available for overrides.
 const frontendHost = process.env.FRONTEND_HOST || "127.0.0.1";
 const configuredFrontendPort = frontendPort(process.env);
-const frontendEnvironment = { ...process.env };
 const viteBinary = resolve(frontendDirectory, "node_modules", "vite", "bin", "vite.js");
 
-const commands = [
-  {
-    name: "backend",
-    command: backendPython,
-    args: ["-m", "uvicorn", "app.main:app", "--reload", "--reload-dir", "backend", "--access-log", "--port", backendPort(process.env), "--app-dir", "backend"],
-    cwd: process.cwd(),
-    env: process.env,
-  },
-  {
-    name: "frontend",
-    command: process.execPath,
-    args: [
-      viteBinary,
-      "--host",
-      frontendHost,
-      "--port",
-      configuredFrontendPort,
-    ],
-    cwd: frontendDirectory,
-    env: frontendEnvironment,
-  },
-];
+function isPortOpen(port, host = "127.0.0.1") {
+  return new Promise((resolve) => {
+    const socket = createConnection({ port: Number(port), host });
+    const finish = (open) => {
+      socket.destroy();
+      resolve(open);
+    };
+    socket.setTimeout(250, () => finish(false));
+    socket.once("connect", () => finish(true));
+    socket.once("error", () => finish(false));
+  });
+}
+
+function listeningPid(port) {
+  if (process.platform !== "win32") return null;
+  try {
+    const output = execFileSync("netstat", ["-ano", "-p", "tcp"], { encoding: "utf8" });
+    const portPattern = new RegExp(`\\:${Number(port)}\\s+.*\\bLISTENING\\b\\s+\\d+\\s*$`);
+    const line = output.split(/\r?\n/).find((entry) => portPattern.test(entry));
+    const match = line?.match(/\s(\d+)\s*$/);
+    return match ? Number(match[1]) : null;
+  } catch {
+    return null;
+  }
+}
+
+function processCommandLine(pid) {
+  if (!pid || process.platform !== "win32") return "";
+  try {
+    return execFileSync(
+      "powershell.exe",
+      ["-NoProfile", "-Command", `(Get-CimInstance Win32_Process -Filter 'ProcessId=${pid}').CommandLine`],
+      { encoding: "utf8" },
+    ).trim();
+  } catch {
+    return "";
+  }
+}
+
+async function prepareFrontend() {
+  if (!(await isPortOpen(configuredFrontendPort))) return false;
+  const pid = listeningPid(configuredFrontendPort);
+  const commandLine = processCommandLine(pid);
+  const isProjectVite = /vite(?:\\|\/|\.js)|node_modules[\\/]vite/i.test(commandLine);
+  if (pid && isProjectVite) {
+    console.log(`[dev] Restarting existing Vite process ${pid} with fresh dependency optimization.`);
+    spawnSync("taskkill", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore" });
+    const deadline = Date.now() + 5_000;
+    while (Date.now() < deadline && (await isPortOpen(configuredFrontendPort))) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    return false;
+  }
+  console.log(`[dev] Frontend port ${configuredFrontendPort} is owned by another process; reusing it.`);
+  return true;
+}
+
+async function isCareerCopilotBackend(port) {
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/api/v1/health/live`, {
+      signal: AbortSignal.timeout(1500),
+    });
+    if (!response.ok) return false;
+    const body = await response.json();
+    return body?.service === "Career Copilot API" && body?.live === true;
+  } catch {
+    return false;
+  }
+}
+
+function bindBackendPort(port) {
+  const value = String(port);
+  process.env.BACKEND_PORT = value;
+  process.env.PUBLIC_API_BASE_URL = `http://127.0.0.1:${value}`;
+  return value;
+}
+
+async function claimBackendPort() {
+  const requested = Number(backendPort(process.env));
+  if (!(await isPortOpen(requested))) return bindBackendPort(requested);
+  if (await isCareerCopilotBackend(requested)) {
+    const pid = listeningPid(requested);
+    if (pid) {
+      console.log(`[dev] Restarting existing Career Copilot backend ${pid} on port ${requested}.`);
+      spawnSync("taskkill", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore" });
+      const deadline = Date.now() + 5_000;
+      while (Date.now() < deadline && (await isPortOpen(requested))) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    }
+    return bindBackendPort(requested);
+  }
+  for (let candidate = requested + 1; candidate <= requested + 20; candidate += 1) {
+    if (await isPortOpen(candidate)) continue;
+    console.warn(
+      `[dev] Port ${requested} is in use by another process. Using ${candidate} for the Career Copilot API.`,
+    );
+    return bindBackendPort(candidate);
+  }
+  throw new Error(
+    `Backend port ${requested} is in use and no fallback port was free. Stop the other process or set BACKEND_PORT.`,
+  );
+}
+
+function buildCommands() {
+  return [
+    {
+      name: "backend",
+      command: backendPython,
+      args: ["-m", "uvicorn", "app.main:app", "--reload", "--reload-dir", "backend", "--access-log", "--log-level", "info", "--port", backendPort(process.env), "--app-dir", "backend"],
+      cwd: process.cwd(),
+      env: process.env,
+    },
+    {
+      name: "frontend",
+      command: process.execPath,
+      args: [
+        viteBinary,
+        "--host",
+        frontendHost,
+        "--port",
+        configuredFrontendPort,
+        "--force",
+      ],
+      cwd: frontendDirectory,
+      env: { ...process.env },
+    },
+  ];
+}
 
 const children = new Map();
 let stopping = false;
@@ -90,7 +197,7 @@ process.on("exit", () => {
 });
 
 async function waitForBackend() {
-  // Prefer the liveness endpoint: process is up without waiting on Firestore/Storage.
+  // Prefer the liveness endpoint: process is up without waiting on Supabase/Storage.
   // Full /health still probes dependencies and can exceed short AbortSignal timeouts
   // on cold networks — that was aborting npm run dev after uvicorn was already ready.
   const port = backendPort(process.env);
@@ -126,9 +233,12 @@ async function waitForBackend() {
 }
 
 try {
+  await claimBackendPort();
+  const commands = buildCommands();
+  const existingFrontend = await prepareFrontend();
   start(commands[0]);
   await waitForBackend();
-  start(commands[1]);
+  if (!existingFrontend) start(commands[1]);
 } catch (error) {
   console.error(`[dev] ${error instanceof Error ? error.message : String(error)}`);
   stop(1);

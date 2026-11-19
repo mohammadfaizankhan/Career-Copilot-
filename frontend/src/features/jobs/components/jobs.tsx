@@ -1,11 +1,5 @@
-import { dynamic } from "@/shared/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  RefreshCw,
-  MapPin,
-  CheckCircle2,
-  ExternalLink,
-} from "lucide-react";
+import { CopilotIcon } from "@/components/ui/copilot-icons";
 import { Link } from "@/shared/ui/router-link";
 import { apiRequest } from "@/shared/api/client";
 import { isDemoSession } from "@/features/auth/demo-session";
@@ -17,12 +11,10 @@ import { isPipelineStatus } from "./job-types";
 import { jobRecsCacheKey, readJobRecsCache, writeJobRecsCache } from "../job-recs-cache";
 import { Badge, Button, Card, EmptyState, PageHeader } from "@/shared/ui/primitives";
 
-export type { Job, Recommendation } from "./job-types";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { FLUID_SPRING_TRANSITION } from "@/components/ui/motion-system";
 
-const CareerGlobe = dynamic(() => import("@/features/jobs/components/career-globe"), {
-  ssr: false,
-  loading: () => <div className="globe-loading">Loading Earth map...</div>,
-});
+export type { Job, Recommendation } from "./job-types";
 
 type PipelineFilter = "all" | "saved" | "applied" | "rejected";
 
@@ -35,23 +27,11 @@ type ResumeSummary = {
   } | null;
 };
 
-function hasCoordinates(job: Job): boolean {
-  return (
-    typeof job.latitude === "number" &&
-    Number.isFinite(job.latitude) &&
-    typeof job.longitude === "number" &&
-    Number.isFinite(job.longitude)
-  );
-}
-
-function locationPinRank(id: string): number {
-  let hash = 2166136261;
-  for (let index = 0; index < id.length; index += 1) {
-    hash ^= id.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
-}
+type JobAgentStatus = {
+  mode: "agent" | "evidence" | "evidence_fallback";
+  provider?: string | null;
+  error?: string;
+};
 
 function normalizeStatus(status: string | undefined | null): SavedJobStatus {
   const value = (status || "saved").toLowerCase() as SavedJobStatus;
@@ -59,6 +39,7 @@ function normalizeStatus(status: string | undefined | null): SavedJobStatus {
 }
 
 export function JobsHome({ savedOnly = false }: { savedOnly?: boolean }) {
+  const reduceMotion = useReducedMotion();
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [error, setError] = useState("");
@@ -75,6 +56,7 @@ export function JobsHome({ savedOnly = false }: { savedOnly?: boolean }) {
   const [filterSalaryMin, setFilterSalaryMin] = useState<number | "">("");
   const [selectedJob, setSelectedJob] = useState<string | null>(null);
   const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
+  const [agentStatus, setAgentStatus] = useState<JobAgentStatus>({ mode: "evidence", provider: null });
   const limit = 20;
   const requestSequence = useRef(0);
   const hydratedCacheKey = useRef<string | null>(null);
@@ -130,11 +112,14 @@ export function JobsHome({ savedOnly = false }: { savedOnly?: boolean }) {
       setStatusByJobId(cached.statusByJobId || {});
       setIsLoading(false);
       setIsRefreshing(true);
+      setHasMore(cached.jobs.length >= limit);
       return;
     }
-    // Different filters without cache: drop previous filter's rows so UI does not lie.
+    // Different filters without cache: drop previous filter's rows so UI does not lie — producer fix.
     setRecommendations([]);
     setJobs([]);
+    setOffset(0);
+    setHasMore(true);
     setIsLoading(true);
     setIsRefreshing(false);
   }, [cacheKey, savedOnly]);
@@ -167,7 +152,10 @@ export function JobsHome({ savedOnly = false }: { savedOnly?: boolean }) {
           // flow relied on the backend to discover this state, which produced
           // a confusing 409 when the user had just confirmed a resume in the
           // Resume Analysis page and this page still held stale state.
-          const resumes = await apiRequest<ResumeSummary[]>("/resumes");
+          const [resumes, savedRows] = await Promise.all([
+            apiRequest<ResumeSummary[]>("/resumes"),
+            apiRequest<SavedJobRow[]>("/saved-jobs"),
+          ]);
           const activeResume = (Array.isArray(resumes) ? resumes : []).find((row) => row.is_active);
           const confirmedVersion = activeResume?.latest_version;
           if (!confirmedVersion?.id || confirmedVersion.extraction_status !== "confirmed") {
@@ -175,14 +163,12 @@ export function JobsHome({ savedOnly = false }: { savedOnly?: boolean }) {
           }
           body.resume_version_id = confirmedVersion.id;
 
-          const [result, savedRows] = await Promise.all([
-            apiRequest<{ recommendations: Recommendation[] }>("/job-recommendations/generate", {
-              method: "POST",
-              body: JSON.stringify(body),
-            }),
-            apiRequest<SavedJobRow[]>("/saved-jobs"),
-          ]);
+          const result = await apiRequest<{ recommendations: Recommendation[]; agent?: JobAgentStatus }>("/job-recommendations/generate", {
+            method: "POST",
+            body: JSON.stringify(body),
+          });
           const newRecs = result.recommendations || [];
+          setAgentStatus(result.agent || { mode: "evidence", provider: null });
           const newJobs = newRecs.map((row) => row.job);
           if (sequence !== requestSequence.current) return;
           const pipeline = applySavedRows(Array.isArray(savedRows) ? savedRows : []);
@@ -245,12 +231,15 @@ export function JobsHome({ savedOnly = false }: { savedOnly?: boolean }) {
     }
   }
 
+
   async function toggleSave(jobId: string, e?: React.MouseEvent) {
     if (e) e.stopPropagation();
     const current = statusByJobId[jobId];
     // Unsave only when status is plain "saved". Applied/rejected stay tracked via status buttons.
     const shouldUnsave = current === "saved";
-    const previous = { ...statusByJobId };
+    // Producer fix: capture per-job previous, not whole map shallow, to avoid concurrent rollback corruption.
+    const previousStatus = statusByJobId[jobId];
+    const previousJobs = savedOnly ? [...jobs] : null;
 
     if (shouldUnsave) {
       setStatusByJobId((map) => {
@@ -278,7 +267,14 @@ export function JobsHome({ savedOnly = false }: { savedOnly?: boolean }) {
       }
     } catch (err) {
       setError((err as Error).message);
-      setStatusByJobId(previous);
+      // Rollback only this job's key — enriched with truncated jobId for telemetry.
+      setStatusByJobId((map) => {
+        const next = { ...map };
+        if (previousStatus === undefined) delete next[jobId];
+        else next[jobId] = previousStatus;
+        return next;
+      });
+      if (savedOnly && previousJobs) setJobs(previousJobs);
       if (savedOnly) load();
     }
   }
@@ -345,42 +341,18 @@ export function JobsHome({ savedOnly = false }: { savedOnly?: boolean }) {
     });
   }, [jobs, savedOnly, pipelineFilter, statusByJobId]);
 
-  const globeJobs = useMemo(
-    () =>
-      visibleJobs
-        .filter(hasCoordinates)
-        .sort((a, b) => locationPinRank(a.id) - locationPinRank(b.id))
-        .slice(0, 12)
-        .map((job) => ({
-          id: job.id,
-          title: job.title,
-          company: job.company,
-          location: job.location,
-          work_mode: job.work_mode,
-          description: job.description,
-          requirements: job.requirements,
-          application_url: job.application_url,
-          salary_min: job.salary_min,
-          salary_max: job.salary_max,
-          latitude: job.latitude as number,
-          longitude: job.longitude as number,
-        })),
-    [visibleJobs],
-  );
-
   const selected = visibleJobs.find((job) => job.id === selectedJob) || jobs.find((j) => j.id === selectedJob) || null;
   const selectedRec = recommendations.find((row) => row.job.id === selectedJob);
   const selectedStatus = selected ? statusByJobId[selected.id] : undefined;
 
   return (
-    <div className="feature-page">
+    <div className="feature-page jobs-radar-page">
       <PageHeader
-        eyebrow="Jobs"
-        title={savedOnly ? "My job pipeline" : "Job recommendations"}
+        title={savedOnly ? "My job pipeline" : "Your next move, shortlisted"}
         description={
           savedOnly
             ? "Track jobs you saved, applied to, or rejected. Counts update as you mark each role."
-            : "Recommendations are scored from confirmed resume evidence. Save roles, mark applied, or mark rejected as you go."
+            : "A focused shortlist built from your profile, preferences, and confirmed resume evidence."
         }
         action={
           savedOnly ? (
@@ -395,7 +367,21 @@ export function JobsHome({ savedOnly = false }: { savedOnly?: boolean }) {
         }
       />
 
-      <div className="grid-3" style={{ marginBottom: 8 }}>
+      {!savedOnly ? (
+        <section className="jobs-radar-intro" aria-labelledby="jobs-radar-title">
+          <div className="jobs-radar-copy">
+            <h2 id="jobs-radar-title">Less scrolling. More signal.</h2>
+            <p>Fresh roles are collected from the configured job-search sources, then the fit agent checks each one against the evidence in your profile.</p>
+          </div>
+          <div className="jobs-agent-panel" data-testid="job-agent-status">
+            <span className="jobs-agent-label">Recommendation engine</span>
+            <strong>{agentStatus.mode === "agent" ? "AI fit agent active" : agentStatus.mode === "evidence_fallback" ? "Evidence matching active" : "Profile evidence active"}</strong>
+            <span>{agentStatus.mode === "agent" ? `Provider: ${agentStatus.provider || "configured LLM"}` : "No profile or job data is invented."}</span>
+          </div>
+        </section>
+      ) : null}
+
+      <div className="jobs-stat-rail">
         <Card className="metric-card">
           <p className="metric-card-label">Saved</p>
           <p className="metric-value">{counts.saved}</p>
@@ -447,12 +433,12 @@ export function JobsHome({ savedOnly = false }: { savedOnly?: boolean }) {
               }
             />
           </label>
-          <Button variant="secondary" onClick={() => void syncExternalJobs()}>
-            <RefreshCw size={16} aria-hidden /> Sync external jobs
+          <Button variant="secondary" onClick={() => void syncExternalJobs()} data-testid="freehire-sync">
+            <CopilotIcon name="refresh" size={16} /> Refresh job search
           </Button>
         </div>
       ) : (
-        <div className="cluster" role="tablist" aria-label="Filter pipeline by status" style={{ marginBottom: 8 }}>
+        <div className="cluster" role="tablist" aria-label="Filter pipeline by status" style={{ marginBottom: 8, position: "relative" }}>
           {(
             [
               ["all", `All (${counts.total})`],
@@ -460,16 +446,35 @@ export function JobsHome({ savedOnly = false }: { savedOnly?: boolean }) {
               ["applied", `Applied (${counts.applied})`],
               ["rejected", `Rejected (${counts.rejected})`],
             ] as const
-          ).map(([key, label]) => (
-            <Button
-              key={key}
-              variant={pipelineFilter === key ? "secondary" : "ghost"}
-              onClick={() => setPipelineFilter(key)}
-              aria-pressed={pipelineFilter === key}
-            >
-              {label}
-            </Button>
-          ))}
+          ).map(([key, label]) => {
+            const active = pipelineFilter === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                className={`button ${active ? "button-secondary is-active" : "button-ghost"}`}
+                onClick={() => setPipelineFilter(key)}
+                aria-pressed={active}
+                style={{ position: "relative" }}
+              >
+                {active ? (
+                  <motion.span
+                    layoutId="job-pipeline-active-pill"
+                    transition={reduceMotion ? { duration: 0 } : FLUID_SPRING_TRANSITION}
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      borderRadius: "inherit",
+                      background: "color-mix(in srgb, var(--primary-strong) 12%, transparent)",
+                      border: "1px solid color-mix(in srgb, var(--primary-strong) 25%, transparent)",
+                      zIndex: 0,
+                    }}
+                  />
+                ) : null}
+                <span style={{ position: "relative", zIndex: 1 }}>{label}</span>
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -477,14 +482,6 @@ export function JobsHome({ savedOnly = false }: { savedOnly?: boolean }) {
         <div className="feature-alert" role="alert">
           <p className="field-error">{error}</p>
         </div>
-      ) : null}
-
-      {globeJobs.length > 0 ? (
-        <Card className="jobs-globe-card">
-          <div className="jobs-globe">
-            <CareerGlobe jobs={globeJobs} />
-          </div>
-        </Card>
       ) : null}
 
       {isLoading ? (
@@ -548,18 +545,20 @@ export function JobsHome({ savedOnly = false }: { savedOnly?: boolean }) {
         </div>
       )}
 
-      {selected ? (
-        <JobModal
-          job={selected}
-          recommendation={selectedRec}
-          status={selectedStatus}
-          onToggleSave={() => void toggleSave(selected.id)}
-          onMarkApplied={() => void setJobStatus(selected.id, "applied")}
-          onMarkRejected={() => void setJobStatus(selected.id, "rejected")}
-          onClose={() => setSelectedJob(null)}
-          onDismiss={() => void dismissJob(selected.id)}
-        />
-      ) : null}
+      <AnimatePresence>
+        {selected ? (
+          <JobModal
+            job={selected}
+            recommendation={selectedRec}
+            status={selectedStatus}
+            onToggleSave={() => void toggleSave(selected.id)}
+            onMarkApplied={() => void setJobStatus(selected.id, "applied")}
+            onMarkRejected={() => void setJobStatus(selected.id, "rejected")}
+            onClose={() => setSelectedJob(null)}
+            onDismiss={() => void dismissJob(selected.id)}
+          />
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }
@@ -575,7 +574,6 @@ export function JobDetail({ jobId }: { jobId: string }) {
   return (
     <>
       <PageHeader
-        eyebrow="Job record"
         title={job?.title || "Job details"}
         description={
           job ? `${job.company}${job.location ? `  ·  ${job.location}` : ""}` : "Loading job details"
@@ -591,10 +589,10 @@ export function JobDetail({ jobId }: { jobId: string }) {
         <Card className="stack">
           <div className="cluster">
             <Badge variant="secondary">
-              <MapPin size={14} aria-hidden /> {job.location || "Location not specified"}
+              <CopilotIcon name="pin" size={14} /> {job.location || "Location not specified"}
             </Badge>
             <Badge variant="secondary">
-              <CheckCircle2 size={14} aria-hidden /> Stored job record
+              <CopilotIcon name="check" size={14} /> Stored job record
             </Badge>
             {job.work_mode ? <Badge variant="secondary">{job.work_mode}</Badge> : null}
             {job.salary_min != null || job.salary_max != null ? (
@@ -620,7 +618,7 @@ export function JobDetail({ jobId }: { jobId: string }) {
             <Link className="button button-secondary" href="/jobs">Back to jobs</Link>
             {job.application_url ? (
               <a className="button button-primary" href={job.application_url} target="_blank" rel="noreferrer">
-                Apply on employer site <ExternalLink size={14} aria-hidden />
+                Apply on employer site <CopilotIcon name="external" size={14} />
               </a>
             ) : null}
           </div>

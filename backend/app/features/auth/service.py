@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
@@ -52,9 +52,9 @@ def create_access_token(user_id: UUID, email: str, settings: Settings, token_ver
 
 def auth_provider_from_user_row(row: dict) -> str:
     """Return the persisted authentication method without trusting browser state."""
-    if str(row.get("firebase_uid") or "").strip():
-        return "google"
-    if str(row.get("password_hash") or "").strip() or str(row.get("supabase_uid") or "").strip():
+    if str(row.get("supabase_uid") or "").strip():
+        return "supabase"
+    if str(row.get("password_hash") or "").strip():
         return "email"
     return "unknown"
 
@@ -93,6 +93,8 @@ def parse_file_access_token(
     bucket: str,
     path: str,
 ) -> UUID:
+    # Enrich low-level validation with truncated token/path for telemetry (producer unknown, so enrich here)
+    trunc_token = str(token)[:80] if isinstance(token, str) else f"type={type(token).__name__} value={str(token)[:80]}"
     try:
         payload = jwt.decode(
             token,
@@ -101,17 +103,17 @@ def parse_file_access_token(
             options={"require": ["sub", "exp", "iat", "scope", "bucket", "path"]},
         )
     except jwt.ExpiredSignatureError as exc:
-        raise ApiError(401, "file_token_expired", "The file access link has expired. Refresh the page.") from exc
+        raise ApiError(401, "file_token_expired", f"The file access link has expired for bucket '{bucket}' path '{str(path)[:80]}': type={type(token).__name__} token={trunc_token[:40]}") from exc
     except jwt.PyJWTError as exc:
-        raise ApiError(401, "invalid_file_token", "The file access link is invalid.") from exc
+        raise ApiError(401, "invalid_file_token", f"[FileToken] Invalid file token for bucket '{bucket}' path '{str(path)[:80]}': type={type(token).__name__} token={trunc_token[:40]} ({type(exc).__name__})") from exc
     if payload.get("scope") != FILE_READ_SCOPE:
-        raise ApiError(401, "invalid_file_token", "The file access link is invalid.")
+        raise ApiError(401, "invalid_file_token", f"[FileToken] Scope mismatch for bucket '{bucket}' path '{str(path)[:80]}': type={type(token).__name__} token={trunc_token[:40]} scope={str(payload.get('scope'))[:20]}")
     if str(payload.get("bucket") or "") != str(bucket) or str(payload.get("path") or "") != str(path):
-        raise ApiError(401, "invalid_file_token", "The file access link does not match this file.")
+        raise ApiError(401, "invalid_file_token", f"[FileToken] Path mismatch for request bucket '{bucket}' path '{str(path)[:80]}': token bucket='{str(payload.get('bucket'))[:40]}' token path='{str(payload.get('path'))[:80]}' type={type(token).__name__}")
     try:
         return UUID(str(payload["sub"]))
     except (KeyError, TypeError, ValueError) as exc:
-        raise ApiError(401, "invalid_file_token", "The file access link is invalid.") from exc
+        raise ApiError(401, "invalid_file_token", f"[FileToken] Invalid sub for bucket '{bucket}' path '{str(path)[:80]}': type={type(token).__name__} token={trunc_token[:40]}") from exc
 
 
 def _user_from_token(token: str, settings: Settings) -> CurrentUser:
@@ -130,7 +132,7 @@ def _user_from_token(token: str, settings: Settings) -> CurrentUser:
     rows = (
         database_client(settings)
         .table("users")
-        .select("id,email,full_name,token_version,password_hash,supabase_uid,firebase_uid")
+        .select("id,email,full_name,token_version,password_hash,supabase_uid")
         .eq("id", str(user_id))
         .limit(1)
         .execute()
@@ -159,7 +161,7 @@ async def get_current_user(
     token = parse_bearer_header(authorization) if authorization else career_copilot_session
     if not token:
         raise ApiError(401, "authentication_required", "Authentication is required.")
-    # Firestore identity verification is synchronous network I/O. Keep it off
+    # Database identity verification is synchronous network I/O. Keep it off
     # the async event loop so auth/session cannot stall unrelated requests.
     return await asyncio.to_thread(_user_from_token, token, settings)
 
@@ -177,3 +179,4 @@ async def get_current_user_optional(
     if not token:
         return None
     return await asyncio.to_thread(_user_from_token, token, settings)
+

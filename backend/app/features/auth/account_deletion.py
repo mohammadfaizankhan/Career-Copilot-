@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import logging
 from typing import Any
@@ -10,7 +10,11 @@ from app.features.auth.service import CurrentUser
 logger = logging.getLogger(__name__)
 CONFIRM_PHRASE = "DELETE MY ACCOUNT"
 
+# Shared catalog tables are never user-owned. Everything else with user_id is.
+_SHARED_TABLES = frozenset({"jobs", "_setup_checks"})
+
 # User-owned collections deleted before the users document (children first by convention).
+# Keep the explicit list as a fallback if TABLE_COLUMNS is unavailable.
 USER_OWNED_TABLES: list[tuple[str, str]] = [
     ("activity_events", "user_id"),
     ("user_notifications", "user_id"),
@@ -47,7 +51,28 @@ _DOCUMENT_PATH_QUERIES: list[tuple[str, str]] = [
     ("resume_versions", "storage_path"),
     ("resume_exports", "storage_path"),
     ("job_descriptions", "storage_path"),
+    ("interview_responses", "audio_path"),
 ]
+
+
+def _owned_tables() -> list[tuple[str, str]]:
+    try:
+        from app.database.client import TABLE_COLUMNS
+    except Exception:
+        return list(USER_OWNED_TABLES)
+    discovered: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for table, columns in TABLE_COLUMNS.items():
+        if table in _SHARED_TABLES or table in {"users", "profiles"}:
+            continue
+        if "user_id" not in columns:
+            continue
+        discovered.append((table, "user_id"))
+        seen.add(table)
+    for table, column in USER_OWNED_TABLES:
+        if table not in seen:
+            discovered.append((table, column))
+    return discovered
 
 
 def confirmation_is_valid(phrase: str | None) -> bool:
@@ -91,11 +116,92 @@ def collect_user_storage_paths(client, user: CurrentUser) -> dict[str, list[str]
     return buckets
 
 
+def lookup_supabase_auth_ids(settings: Settings, *, supabase_uid: str, email: str | None) -> list[str]:
+    """Collect every Auth user id that still belongs to this account."""
+    ids: list[str] = []
+    seen: set[str] = set()
+
+    def _add(value: str) -> None:
+        cleaned = str(value or "").strip()
+        if cleaned and cleaned not in seen:
+            seen.add(cleaned)
+            ids.append(cleaned)
+
+    _add(supabase_uid)
+    email_clean = str(email or "").strip().lower()
+    if not email_clean or not settings.resolved_supabase_url or not settings.supabase_server_key:
+        return ids
+    import httpx
+
+    url = f"{settings.resolved_supabase_url}/auth/v1/admin/users"
+    headers = {
+        "Authorization": f"Bearer {settings.supabase_server_key}",
+        "apikey": settings.supabase_server_key,
+    }
+    try:
+        response = httpx.get(
+            url,
+            headers=headers,
+            params={"page": 1, "per_page": 200},
+            timeout=30,
+        )
+        if response.status_code >= 400:
+            logger.warning(
+                "account_delete_auth_lookup_failed status=%s body=%s",
+                response.status_code,
+                response.text[:200],
+            )
+            return ids
+        payload = response.json() or {}
+        users = payload.get("users") if isinstance(payload, dict) else payload
+        if not isinstance(users, list):
+            return ids
+        for row in users:
+            if not isinstance(row, dict):
+                continue
+            row_email = str(row.get("email") or "").strip().lower()
+            if row_email == email_clean:
+                _add(str(row.get("id") or ""))
+    except Exception:
+        logger.exception("account_delete_auth_lookup_failed email=%s", email_clean)
+    return ids
+
+
+def delete_supabase_auth_user(settings: Settings, supabase_uid: str) -> bool:
+    """Delete the Supabase Auth identity so nothing about the account survives.
+
+    Returns True when the user was deleted (or was already gone). Raises
+    RuntimeError on any other failure so the caller can stop the destructive
+    local purge while the provider identity still exists.
+    """
+    import httpx
+
+    base_url = settings.resolved_supabase_url
+    key = settings.supabase_server_key
+    if not base_url or not key:
+        raise RuntimeError("Supabase admin credentials are not configured.")
+    url = f"{base_url}/auth/v1/admin/users/{supabase_uid}"
+    response = httpx.delete(
+        url,
+        headers={"Authorization": f"Bearer {key}", "apikey": key},
+        timeout=30,
+    )
+    if response.status_code in (200, 204, 404):
+        # 404 means the identity was already removed; nothing left to purge.
+        return True
+    logger.error(
+        "account_delete_supabase_auth_failed uid=%s status=%s body=%s",
+        supabase_uid,
+        response.status_code,
+        response.text[:200],
+    )
+    raise RuntimeError(f"Supabase auth deletion failed with status {response.status_code}.")
+
+
 def delete_user_owned_records(client, user: CurrentUser) -> dict[str, int]:
-    """Delete all known user-owned rows. Returns counts per table. Raises on hard failure."""
     uid = str(user.id)
     deleted: dict[str, int] = {}
-    for table, column in USER_OWNED_TABLES:
+    for table, column in _owned_tables():
         try:
             result = client.table(table).delete().eq(column, uid).execute()
             deleted[table] = len(result.data or [])
@@ -119,6 +225,51 @@ def delete_user_owned_records(client, user: CurrentUser) -> dict[str, int]:
     return deleted
 
 
+def remaining_user_rows(client, user_id: str) -> dict[str, int]:
+    """Count leftover rows that still mention this account."""
+    uid = str(user_id)
+    leftover: dict[str, int] = {}
+    for table, column in _owned_tables():
+        count = _count_eq(client, table, column, uid)
+        if count:
+            leftover[table] = count
+    for table in ("profiles", "users"):
+        count = _count_eq(client, table, "id", uid)
+        if count:
+            leftover[table] = count
+    return leftover
+
+
+def _count_eq(client, table: str, column: str, value: str) -> int:
+    try:
+        result = client.table(table).select("id", count="exact", head=True).eq(column, value).execute()
+        if result.count is not None:
+            return int(result.count)
+        rows = client.table(table).select("id").eq(column, value).limit(20).execute().data or []
+        return len(rows)
+    except Exception:
+        logger.exception("account_delete_leftover_count_failed table=%s", table)
+        return -1
+
+
+def assert_user_erased(client, user_id: str) -> None:
+    leftover = remaining_user_rows(client, user_id)
+    unknown = [table for table, count in leftover.items() if count < 0]
+    present = {table: count for table, count in leftover.items() if count > 0}
+    if unknown or present:
+        logger.error(
+            "account_delete_leftover user_id=%s leftover=%s unknown=%s",
+            user_id,
+            present,
+            unknown,
+        )
+        raise ApiError(
+            500,
+            "account_deletion_incomplete",
+            "Account data still remained after deletion. Please retry.",
+        )
+
+
 def _list_prefix_recursive(admin_client, bucket: str, prefix: str) -> list[str]:
     found: list[str] = []
     stack = [prefix.strip("/")]
@@ -132,7 +283,7 @@ def _list_prefix_recursive(admin_client, bucket: str, prefix: str) -> list[str]:
             entries = admin_client.storage.from_(bucket).list(current) or []
         except Exception as exc:
             logger.exception("account_delete_storage_list_failed bucket=%s prefix=%s", bucket, current)
-            raise RuntimeError(f"Could not enumerate Firebase Storage bucket {bucket}") from exc
+            raise RuntimeError(f"Could not enumerate Supabase Storage bucket {bucket}") from exc
         for entry in entries:
             name = (entry or {}).get("name")
             if not name:
@@ -183,4 +334,22 @@ def purge_user_storage(
                     uid,
                 )
                 raise ApiError(500, "account_deletion_incomplete", "Could not remove all stored account files.") from exc
+        try:
+            leftover_files = _list_prefix_recursive(admin_client, bucket, uid)
+        except Exception:
+            logger.exception("account_delete_storage_relist_failed bucket=%s user_id=%s", bucket, uid)
+            leftover_files = []
+        if leftover_files:
+            logger.error(
+                "account_delete_storage_leftover bucket=%s user_id=%s count=%s",
+                bucket,
+                uid,
+                len(leftover_files),
+            )
+            raise ApiError(
+                500,
+                "account_deletion_incomplete",
+                "Stored account files still remained after deletion. Please retry.",
+            )
     return removed
+

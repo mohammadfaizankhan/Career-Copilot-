@@ -7,6 +7,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { apiRequest } from "@/shared/api/client";
 import { Badge, Button, Card, EmptyState, ErrorState, PageHeader, Progress, Select, Skeleton } from "@/shared/ui/primitives";
+import { motion, useReducedMotion } from "motion/react";
+import {
+  FAST_SPRING_TRANSITION,
+  staggerContainerVariants,
+  staggerItemVariants,
+} from "@/components/ui/motion-system";
 import {
   createInterviewPreparation,
   type ConfirmedJobDescription,
@@ -14,6 +20,7 @@ import {
   type InterviewPreparation,
   type PreparationQuestion,
 } from "@/features/interview/preparation";
+import "@/features/interview/interview.css";
 
 function difficultyTone(difficulty: PreparationQuestion["difficulty"]) {
   return difficulty === "hard" ? "destructive" : difficulty === "medium" ? "outline" : "default";
@@ -24,6 +31,7 @@ function sourceLabel(source: PreparationQuestion["source"]) {
 }
 
 function QuestionList({ title, description, questions }: { title: string; description: string; questions: PreparationQuestion[] }) {
+  const shouldReduceMotion = useReducedMotion();
   return (
     <Card className="stack">
       <div>
@@ -31,24 +39,37 @@ function QuestionList({ title, description, questions }: { title: string; descri
         <p className="muted" style={{ marginBottom: 0 }}>{description}</p>
       </div>
       {questions.length ? (
-        <ol className="stack" style={{ margin: 0, paddingLeft: 20 }}>
+        <motion.ol
+          className="stack"
+          style={{ margin: 0, paddingLeft: 20 }}
+          variants={staggerContainerVariants}
+          initial={shouldReduceMotion ? false : "hidden"}
+          animate="visible"
+        >
           {questions.map((item, index) => (
-            <li key={`${item.question}-${index}`} className="suggestion">
+            <motion.li
+              key={`${item.question}-${index}`}
+              className="suggestion"
+              variants={staggerItemVariants}
+              whileHover={shouldReduceMotion ? undefined : { x: 3 }}
+              transition={FAST_SPRING_TRANSITION}
+            >
               <p style={{ margin: 0 }}>{item.question}</p>
               <div className="cluster" style={{ marginTop: 8 }}>
                 {item.skill ? <Badge variant="secondary">{item.skill}</Badge> : null}
                 <Badge variant={difficultyTone(item.difficulty)}>{item.difficulty}</Badge>
                 <Badge variant="secondary">{sourceLabel(item.source)}</Badge>
               </div>
-            </li>
+            </motion.li>
           ))}
-        </ol>
+        </motion.ol>
       ) : <p className="muted" style={{ margin: 0 }}>No evidence-grounded questions are available for this section.</p>}
     </Card>
   );
 }
 
 export function InterviewPreparationHome() {
+  const shouldReduceMotion = useReducedMotion();
   const [resumes, setResumes] = useState<ConfirmedResume[]>([]);
   const [jobs, setJobs] = useState<ConfirmedJobDescription[]>([]);
   const [resumeVersionId, setResumeVersionId] = useState("");
@@ -113,23 +134,22 @@ export function InterviewPreparationHome() {
     : "/mock-interview/setup";
 
   return (
-    <>
+    <div className="feature-page interview-hub">
       <PageHeader
-        eyebrow="Mock interview"
         title="Prepare with your evidence"
         description="Generate practice material from the confirmed resume, job description, and ATS evidence you select. This does not claim unverified skills or predict hiring outcomes."
-        action={<Link className="button button-secondary" href="/mock-interview">All sessions</Link>}
+        action={<Link className="button button-primary" href="/mock-interview">Start a mock interview</Link>}
       />
       {sourceLoading ? <div className="stack"><Skeleton lines={5} /><Skeleton lines={6} /></div> : sourceError ? <ErrorState onRetry={() => void loadSources()} /> : !confirmedResumes.length || !confirmedJobs.length ? (
         <EmptyState
-          title="Confirm your sources first"
+          title="Start a mock interview without documents"
           description={
             !confirmedResumes.length
-              ? "Upload a resume once (profile or Resume Analysis), confirm the extraction, then return here. Saved resumes are reused — you do not need to re-upload."
-              : "Confirm a job description in Resume Analysis, then return here. Your saved resume is already available."
+              ? "A resume is optional. Start a round from your chosen role and focus, or upload a resume later if you want questions grounded in your work."
+              : "A job description is optional. Start a round now, or confirm a job description if you want questions tied to a posting."
           }
-          href={!confirmedResumes.length ? "/settings/profile" : "/resume-analysis?tab=upload"}
-          action={!confirmedResumes.length ? "Complete profile / resume" : "Open Resume Analysis"}
+          href="/mock-interview"
+          action="Start a mock interview"
         />
       ) : (
         <Card className="stack">
@@ -162,11 +182,16 @@ export function InterviewPreparationHome() {
       {error ? <p role="alert" className="field-error">{error}</p> : null}
       {loading ? <div className="stack" style={{ marginTop: 24 }}><Skeleton lines={7} /><Skeleton lines={8} /></div> : null}
       {data ? (
-        <div className="stack" style={{ marginTop: 24 }}>
+        <motion.div
+          className="stack"
+          style={{ marginTop: 24 }}
+          variants={staggerContainerVariants}
+          initial={shouldReduceMotion ? false : "hidden"}
+          animate="visible"
+        >
           <Card className="stack">
             <div className="row">
               <div>
-                <p className="eyebrow">Preparation readiness</p>
                 <h2 style={{ margin: 0 }}>{data.interview_readiness.score}% evidence coverage</h2>
                 <p className="muted" style={{ marginBottom: 0 }}>{data.interview_readiness.summary}</p>
               </div>
@@ -188,8 +213,8 @@ export function InterviewPreparationHome() {
           <QuestionList title="Focus-area questions" description="Use these requirements to guide preparation; missing means not found in the selected resume, not that you lack the skill." questions={data.missing_skill_questions} />
           <QuestionList title="Coding questions" description="State your approach, edge cases, tests, and complexity before implementation." questions={data.coding_questions} />
           <QuestionList title="HR questions" description="Use concise, truthful examples from your experience." questions={data.hr_questions} />
-        </div>
+        </motion.div>
       ) : null}
-    </>
+    </div>
   );
 }

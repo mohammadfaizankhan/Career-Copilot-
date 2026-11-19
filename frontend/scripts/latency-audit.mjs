@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Latency anti-pattern detector for Career Copilot UI.
  * Red when known page-transition latency bugs are present in source.
  * Usage: node scripts/latency-audit.mjs
@@ -95,19 +95,18 @@ if (hasProvider && dashUsesContext && !shellBoot) {
   });
 }
 
-// Landing lazy sections
-const landingLazy =
-  landing.includes("lazy(() =>") &&
-  landing.includes("career-journey") &&
-  !landing.includes("import { CareerJourney } from");
-if (landingLazy) {
-  pass.push("landing-eager-motion: below-fold sections are lazy");
+// Landing lazy sections / lightweight motion
+const landingHasEagerHeavySection =
+  landing.includes("import { CareerJourney } from") ||
+  landing.includes("import { CareerGlobe } from");
+if (!landingHasEagerHeavySection) {
+  pass.push("landing-eager-motion: no heavy motion/3d sections statically imported");
 } else {
   findings.push({
     id: "landing-eager-motion",
     severity: "P1",
     symptom: "Landing first paint waits on motion sections",
-    evidence: "landing.tsx still statically imports section components",
+    evidence: "landing.tsx still statically imports heavy section components",
     fix: "React.lazy below-the-fold sections",
   });
 }
@@ -164,7 +163,7 @@ if (fs.existsSync(assetsDir)) {
         severity: "P1",
         symptom: `Initial JS ${kb.toFixed(0)}KB still heavy`,
         evidence: `dist/assets/${f} is ${kb.toFixed(1)} KB (gate: 400KB)`,
-        fix: "Further split firebase / marketing if needed",
+        fix: "Further split auth / marketing if needed",
       });
     } else {
       pass.push(`main-chunk-heavy: ${f} ${kb.toFixed(0)}KB under 400KB`);
@@ -184,3 +183,4 @@ for (const f of findings) {
 for (const p of pass) console.log(`[GREEN] ${p}`);
 console.log(`\nSummary: ${findings.length} red, ${pass.length} green`);
 process.exit(findings.some((f) => f.severity === "P0") ? 1 : findings.length ? 1 : 0);
+

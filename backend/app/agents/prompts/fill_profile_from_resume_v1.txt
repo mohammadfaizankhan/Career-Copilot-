@@ -64,7 +64,10 @@ projects (array of objects)
   - title, optional role, description from bullets
 
 certifications (array of objects)
-  - name, optional issuer
+  - name, optional issuer, optional credential_url
+  - credential_url must be the URL printed on the same course/certification entry
+    or recovered in Embedded links with a matching visible label; otherwise null.
+  - Never assign a generic profile link to a course/certification.
 
 languages (array of objects)
   - language, optional proficiency (Fluent/Native/etc.)
@@ -72,6 +75,9 @@ languages (array of objects)
 links (array of objects)
   - url must appear on the resume
   - link_type: linkedin | github | portfolio | website | other
+  - Lines under an "Embedded links" heading contain hyperlink targets recovered from the document file.
+  - Classify LinkedIn and GitHub by host. Use portfolio when the visible label or surrounding text says Portfolio.
+  - Keep each distinct URL as its own object; never merge several URLs into one field.
 
 warnings (array of strings)
   - Note ambiguities (e.g. "years of experience inferred from dates")

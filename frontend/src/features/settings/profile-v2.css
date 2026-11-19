@@ -1,0 +1,1583 @@
+/* ————————————————————————————————
+   Profile v3 — Fresh, simple, modern.
+   Design intent: calm editorial, evidence-first.
+   Signature: translucent material + spring tab indicator + completion orb.
+   Spacing: 8px base → 4/8/12/16/20/24/32/48
+   Radius: 12/16/20  Shadow: soft 0 12px 32px rgb(15 23 42 / 06%)
+   Type: Outfit — tight -0.04em display, 0.95rem body, 0.78rem labels
+   Motion: spring 320ms cubic-bezier(.32,.72,0,1), interruptible, reduced-motion → cross-fade
+   ———————————————————————————————— */
+
+.workspace .feature-page.settings-page.profile-v2 {
+  --ps-text: var(--text);
+  --ps-muted: var(--muted);
+  --ps-line: var(--border);
+  --ps-panel: var(--surface);
+  --ps-soft: var(--surface-muted);
+  --ps-paper: var(--background);
+  --ps-accent: var(--primary-strong);
+  --ps-accent-soft: color-mix(in srgb, var(--ps-accent) 10%, white);
+  /* spacing scale — single source of truth */
+  --ps-4: 4px;
+  --ps-6: 6px;
+  --ps-8: 8px;
+  --ps-12: 12px;
+  --ps-16: 16px;
+  --ps-20: 20px;
+  --ps-24: 24px;
+  --ps-28: 28px;
+  --ps-32: 32px;
+  --ps-48: 48px;
+  --ps-radius-sm: 12px;
+  --ps-radius: 16px;
+  --ps-radius-lg: 20px;
+  --ps-radius-xl: 24px;
+  --ps-pad: 28px;
+  --ps-gap: 20px;
+  --ps-shadow: 0 8px 24px rgb(15 23 42 / 06%), 0 1px 2px rgb(15 23 42 / 04%);
+  --ps-shadow-hover:
+    0 12px 32px rgb(15 23 42 / 08%), 0 4px 12px rgb(15 23 42 / 06%);
+  display: grid !important;
+  width: min(1080px, calc(100% - 32px)) !important;
+  margin-inline: auto !important;
+  gap: var(--ps-24) !important;
+  min-width: 0;
+  padding-bottom: var(--ps-24);
+  position: relative;
+}
+
+/* subtle paper texture — distinctive but quiet */
+.workspace .feature-page.settings-page.profile-v2::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0.6;
+  background:
+    radial-gradient(
+      800px 400px at 20% -10%,
+      color-mix(in srgb, var(--ps-accent) 06%, transparent),
+      transparent 60%
+    ),
+    radial-gradient(
+      600px 400px at 90% 0%,
+      color-mix(in srgb, #10b981 05%, transparent),
+      transparent 60%
+    );
+}
+
+/* —— Page heading — tight editorial —— */
+.workspace .feature-page.settings-page.profile-v2 > .page-heading {
+  display: grid !important;
+  gap: var(--ps-8) !important;
+  margin: 0 !important;
+  padding: var(--ps-8) 0 0 !important;
+  border: 0 !important;
+  max-width: none !important;
+  width: 100% !important;
+}
+.workspace .feature-page.settings-page.profile-v2 > .page-heading::after {
+  display: none !important;
+}
+.workspace .feature-page.settings-page.profile-v2 > .page-heading > div {
+  display: grid;
+  gap: var(--ps-8);
+  min-width: 0;
+}
+.workspace .feature-page.settings-page.profile-v2 > .page-heading .eyebrow {
+  margin: 0 !important;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--ps-accent) !important;
+}
+.workspace .feature-page.settings-page.profile-v2 > .page-heading h1 {
+  margin: 0 !important;
+  max-width: none !important;
+  font-size: clamp(1.9rem, 2.2vw + 0.9rem, 2.35rem) !important;
+  font-weight: 700 !important;
+  line-height: 1.08 !important;
+  letter-spacing: -0.04em !important;
+  color: var(--ps-text) !important;
+  font-optical-sizing: auto;
+}
+.workspace .feature-page.settings-page.profile-v2 > .page-heading p {
+  margin: 0 !important;
+  max-width: 58ch !important;
+  font-size: 0.95rem !important;
+  line-height: 1.6 !important;
+  color: var(--ps-muted) !important;
+}
+
+/* —— Studio wrapper —— */
+.workspace .feature-page.settings-page.profile-v2 .profile-studio {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: var(--ps-20) !important;
+  width: 100%;
+  max-width: none !important;
+  margin: 0 !important;
+  background: transparent !important;
+  overflow-x: clip;
+  min-width: 0;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-loading {
+  display: grid;
+  place-items: center;
+  min-height: 320px;
+  padding: var(--ps-32);
+  border: 1px solid var(--ps-line);
+  border-radius: var(--ps-radius-lg);
+  background: var(--ps-panel);
+}
+
+/* —— Masthead — translucent material, signature —— */
+.workspace .feature-page.settings-page.profile-v2 .profile-masthead {
+  display: grid !important;
+  grid-template-columns: 80px minmax(0, 1fr) minmax(180px, 240px) !important;
+  gap: var(--ps-20) !important;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  padding: var(--ps-20) var(--ps-24);
+  border: 1px solid var(--ps-line);
+  border-radius: var(--ps-radius-lg);
+  background: var(--ps-panel);
+  box-shadow: var(--ps-shadow);
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-masthead::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border-top: 1px solid rgba(255, 255, 255, 0.7);
+  pointer-events: none;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-masthead-photo {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-avatar-preview {
+  width: 80px !important;
+  height: 80px !important;
+  border-radius: var(--ps-radius) !important;
+  border: 1px solid var(--ps-line) !important;
+  overflow: hidden;
+  background: linear-gradient(135deg, var(--ps-accent-soft), var(--ps-panel));
+  box-shadow: 0 2px 8px rgb(15 23 42 / 08%);
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-avatar-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-avatar-fallback {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--ps-accent);
+  background: var(--ps-accent-soft);
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-masthead-copy {
+  display: grid;
+  gap: var(--ps-4);
+  min-width: 0;
+  align-content: center;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-masthead-copy h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+  color: var(--ps-text);
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-masthead-headline,
+.workspace .feature-page.settings-page.profile-v2 .profile-masthead-facts {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  color: var(--ps-muted);
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-identity-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ps-8);
+  align-items: center;
+  margin-top: var(--ps-8);
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-photo-upload {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--ps-line);
+  background: var(--ps-panel);
+  font-size: 0.78rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 100ms ease,
+    box-shadow 160ms ease;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-photo-upload:hover {
+  border-color: color-mix(in srgb, var(--ps-accent) 30%, var(--ps-line));
+  background: var(--ps-accent-soft);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--ps-accent) 10%, transparent);
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-photo-upload:active {
+  transform: scale(0.97);
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-photo-upload span {
+  pointer-events: none;
+}
+.workspace
+  .feature-page.settings-page.profile-v2
+  .profile-photo-upload
+  .file-picker-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-photo-hint {
+  margin: 0;
+  font-size: 0.74rem;
+  color: var(--ps-muted);
+}
+.workspace
+  .feature-page.settings-page.profile-v2
+  .profile-identity-actions
+  .button {
+  min-height: 34px;
+  padding: 0 14px;
+  font-size: 0.78rem;
+  border-radius: 999px;
+}
+
+/* —— Meter — signature orb + progress —— */
+.workspace .feature-page.settings-page.profile-v2 .profile-masthead-meter {
+  display: grid;
+  gap: var(--ps-12);
+  min-width: 0;
+  align-self: center;
+  align-content: center;
+  padding: var(--ps-16);
+  border-radius: var(--ps-radius);
+  border: 1px solid var(--ps-line);
+  background: color-mix(in srgb, var(--ps-soft) 72%, var(--ps-panel));
+  position: relative;
+  max-height: 160px;
+  overflow: hidden;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-masthead-meter-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ps-8);
+}
+.workspace
+  .feature-page.settings-page.profile-v2
+  .profile-masthead-meter-head
+  strong {
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--ps-text);
+}
+.workspace
+  .feature-page.settings-page.profile-v2
+  .profile-masthead-meter-head
+  span {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ps-muted);
+}
+.workspace
+  .feature-page.settings-page.profile-v2
+  .profile-masthead-meter
+  .progress {
+  height: 6px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ps-text) 08%, transparent);
+  overflow: hidden;
+}
+.workspace
+  .feature-page.settings-page.profile-v2
+  .profile-masthead-meter
+  .progress
+  span {
+  background: var(--ps-accent);
+  border-radius: 999px;
+  transition: width 600ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-masthead-handle {
+  margin: 4px 0 0;
+  font-size: 0.82rem;
+  font-weight: 650;
+  color: var(--ps-muted);
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-masthead-handle a {
+  color: var(--ps-accent);
+  text-decoration: none;
+}
+.workspace
+  .feature-page.settings-page.profile-v2
+  .profile-masthead-handle.is-missing {
+  font-weight: 550;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-masthead.is-complete,
+.profile-v2 .profile-masthead.is-complete {
+  grid-template-columns: 80px minmax(0, 1fr) auto !important;
+}
+.workspace
+  .feature-page.settings-page.profile-v2
+  .profile-masthead-meter.is-complete,
+.profile-v2 .profile-masthead-meter.is-complete {
+  animation: profileMeterFade 1.1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: 1.2s;
+  pointer-events: none;
+}
+@keyframes profileMeterFade {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+    max-height: 140px;
+  }
+  45% {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.92);
+    max-height: 0;
+    margin: 0;
+    padding: 0;
+    border-width: 0;
+    overflow: hidden;
+    display: none;
+  }
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-masthead-missing {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: center;
+  margin: 0;
+  padding-top: var(--ps-12);
+  border-top: 1px solid color-mix(in srgb, var(--ps-line) 70%, transparent);
+  font-size: 0.8rem;
+  color: var(--ps-muted);
+}
+.workspace
+  .feature-page.settings-page.profile-v2
+  .profile-masthead-missing
+  > span {
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 0.66rem;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-missing-link {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ps-accent);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1.2px;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-missing-link:hover {
+  color: var(--ps-text);
+}
+
+/* —— Tabs — sticky translucent pill with spring indicator —— */
+/* —— Tabs — sticky translucent pill with spring indicator —— */
+.workspace .feature-page.settings-page.profile-v2 .profile-tabs {
+  position: sticky;
+  top: var(--app-header-height, 64px);
+  z-index: 20;
+  min-width: 0;
+  width: 100%;
+  padding: 6px;
+  border: 1px solid var(--ps-line);
+  border-radius: var(--ps-radius);
+  background: color-mix(in srgb, var(--ps-panel) 94%, var(--background));
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 4px 16px rgb(15 23 42 / 06%), 0 1px 2px rgb(15 23 42 / 04%);
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-tabs-track {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-tabs-track::-webkit-scrollbar {
+  display: none;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-tab {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: max-content;
+  min-height: 42px;
+  padding: 8px 16px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ps-muted);
+  font-size: 0.84rem;
+  font-weight: 650;
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
+  transition:
+    background 200ms ease,
+    color 200ms ease,
+    border-color 200ms ease,
+    box-shadow 200ms ease,
+    transform 100ms ease;
+  position: relative;
+  touch-action: manipulation;
+  cursor: pointer;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-tab svg {
+  flex: 0 0 auto;
+  opacity: 0.9;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-tab:hover {
+  color: var(--ps-text);
+  background: color-mix(in srgb, var(--ps-text) 04%, transparent);
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-tab:active {
+  transform: scale(0.97);
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-tab.is-active {
+  color: var(--ps-text);
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-tab:focus-visible {
+  outline: 2px solid var(--ps-accent);
+  outline-offset: 2px;
+}
+
+/* —— Editor sheet — single column, generous rhythm —— */
+.workspace .feature-page.settings-page.profile-v2 .profile-editor {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: var(--ps-32) !important;
+  min-width: 0;
+  width: 100%;
+  padding: var(--ps-32) var(--ps-32) !important;
+  border: 1px solid color-mix(in srgb, var(--ps-line) 85%, transparent);
+  border-radius: var(--ps-radius-lg);
+  background: var(--ps-panel);
+  box-shadow: var(--ps-shadow);
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-editor > [hidden] {
+  display: none !important;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-editor > .panel:not(.profile-feedback-card),
+.workspace
+  .feature-page.settings-page.profile-v2
+  .profile-editor
+  > .profile-card,
+.workspace
+  .feature-page.settings-page.profile-v2
+  .profile-editor
+  > .profile-resume-studio {
+  display: grid;
+  gap: var(--ps-24);
+  min-width: 0;
+  width: 100%;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--ps-text);
+  transform: none !important;
+}
+
+/* —— Section head — clear hierarchy —— */
+.workspace .feature-page.settings-page.profile-v2 .profile-section-head {
+  display: grid;
+  gap: var(--ps-8);
+  margin: 0;
+  padding: 0 0 var(--ps-16);
+  border-bottom: 1px solid color-mix(in srgb, var(--ps-line) 75%, transparent);
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-section-kicker {
+  display: flex;
+  align-items: center;
+  gap: var(--ps-12);
+  min-width: 0;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-section-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  border-radius: 12px;
+  background: var(--ps-accent-soft);
+  color: var(--ps-accent);
+  border: 1px solid color-mix(in srgb, var(--ps-accent) 12%, transparent);
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-section-head h2,
+.workspace .feature-page.settings-page.profile-v2 .profile-editor h2 {
+  margin: 0 !important;
+  font-size: 1.22rem !important;
+  line-height: 1.2 !important;
+  letter-spacing: -0.03em !important;
+  color: var(--ps-text) !important;
+  font-weight: 700 !important;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-section-lede {
+  margin: 0;
+  max-width: 64ch;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--ps-muted);
+}
+
+/* —— Fields — consistent 2-col grid, 20px gap —— */
+.workspace .feature-page.settings-page.profile-v2 .profile-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--ps-20);
+  align-items: start;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-fields > * {
+  min-width: 0;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-field-span {
+  grid-column: 1 / -1;
+}
+.workspace .feature-page.settings-page.profile-v2 .field-label,
+.workspace .feature-page.settings-page.profile-v2 .profile-field,
+.workspace .feature-page.settings-page.profile-v2 .profile-field label,
+.workspace .feature-page.settings-page.profile-v2 .profile-choice-group legend {
+  display: grid;
+  gap: var(--ps-8);
+  min-width: 0;
+  font-size: 0.8rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--ps-text);
+}
+.workspace .feature-page.settings-page.profile-v2 .field,
+.workspace
+  .feature-page.settings-page.profile-v2
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(
+    [type="hidden"]
+  ),
+.workspace .feature-page.settings-page.profile-v2 select,
+.workspace .feature-page.settings-page.profile-v2 textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  border-radius: var(--ps-radius-sm) !important;
+  border: 1px solid var(--ps-line) !important;
+  background: color-mix(
+    in srgb,
+    var(--ps-soft) 55%,
+    var(--ps-panel)
+  ) !important;
+  color: var(--ps-text) !important;
+  font-size: 0.92rem;
+  font-weight: 450;
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    background 180ms ease,
+    transform 100ms ease;
+}
+.workspace .feature-page.settings-page.profile-v2 textarea {
+  min-height: 104px;
+  resize: vertical;
+  line-height: 1.5;
+  padding: 12px 14px !important;
+}
+.workspace
+  .feature-page.settings-page.profile-v2
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):hover,
+.workspace .feature-page.settings-page.profile-v2 select:hover,
+.workspace
+  .feature-page.settings-page.profile-v2
+  textarea:hover {
+  border-color: color-mix(
+    in srgb,
+    var(--ps-accent) 18%,
+    var(--ps-line)
+  ) !important;
+  background: var(--ps-panel) !important;
+}
+.workspace
+  .feature-page.settings-page.profile-v2
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):focus,
+.workspace .feature-page.settings-page.profile-v2 select:focus,
+.workspace
+  .feature-page.settings-page.profile-v2
+  textarea:focus,
+.workspace .feature-page.settings-page.profile-v2 .field:focus {
+  border-color: var(--ps-accent) !important;
+  background: var(--ps-panel) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ps-accent) 35%, transparent) !important;
+  outline: 2px solid var(--focus, var(--primary-strong)) !important;
+  outline-offset: 1px !important;
+}
+.workspace .feature-page.settings-page.profile-v2 .phone-field {
+  width: 100%;
+  min-width: 0;
+}
+
+/* —— Check row, choice group — soft cards —— */
+.workspace .feature-page.settings-page.profile-v2 .profile-check-row {
+  display: flex;
+  align-items: center;
+  gap: var(--ps-12);
+  min-width: 0;
+  min-height: 46px;
+  padding: 10px 14px;
+  border-radius: var(--ps-radius-sm);
+  border: 1px solid var(--ps-line);
+  background: color-mix(in srgb, var(--ps-soft) 50%, var(--ps-panel));
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-check-row:hover {
+  border-color: color-mix(in srgb, var(--ps-accent) 22%, var(--ps-line));
+  background: var(--ps-panel);
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-check-row span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.workspace
+  .feature-page.settings-page.profile-v2
+  .profile-check-row
+  input[type="checkbox"] {
+  width: 18px !important;
+  height: 18px !important;
+  min-width: 18px !important;
+  min-height: 18px !important;
+  margin: 0;
+  flex: 0 0 auto !important;
+  padding: 0 !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  accent-color: var(--ps-accent);
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-choice-group {
+  display: grid;
+  gap: var(--ps-12);
+  min-width: 0;
+  margin: 0;
+  padding: var(--ps-16);
+  border: 1px solid var(--ps-line);
+  border-radius: var(--ps-radius);
+  background: color-mix(in srgb, var(--ps-soft) 45%, var(--ps-panel));
+}
+.workspace .feature-page.settings-page.profile-v2 .cluster {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ps-8);
+}
+.workspace .feature-page.settings-page.profile-v2 .badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--ps-line);
+  background: var(--ps-accent-soft);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-chip-action {
+  width: 22px;
+  height: 22px;
+  min-height: 22px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  box-shadow: none;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ps-text) 07%, transparent);
+  transition:
+    background 160ms ease,
+    color 160ms ease,
+    transform 100ms ease;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-chip-action:hover {
+  background: color-mix(in srgb, var(--danger, #dc2626) 12%, transparent);
+  color: var(--danger, #dc2626);
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-chip-action:active {
+  transform: scale(0.92);
+}
+
+/* —— Composer, section actions — consistent top rule —— */
+.workspace .feature-page.settings-page.profile-v2 .profile-composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--ps-16);
+  padding: var(--ps-16);
+  border-radius: var(--ps-radius);
+  border: 1px dashed var(--ps-line);
+  background: color-mix(in srgb, var(--ps-soft) 48%, var(--ps-panel));
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-composer-actions,
+.workspace .feature-page.settings-page.profile-v2 .profile-section-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ps-12);
+  align-items: center;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-section-actions {
+  padding-top: var(--ps-20);
+  margin-top: var(--ps-4);
+  border-top: 1px solid color-mix(in srgb, var(--ps-line) 75%, transparent);
+}
+.workspace
+  .feature-page.settings-page.profile-v2
+  .profile-editor
+  .button-primary,
+.workspace
+  .feature-page.settings-page.profile-v2
+  .profile-editor
+  .button-primary:hover {
+  background: var(--ps-text) !important;
+  color: var(--ps-panel) !important;
+  border-color: transparent !important;
+  border-radius: 999px !important;
+  min-height: 42px;
+  font-weight: 650;
+  transition:
+    transform 100ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease;
+}
+.workspace
+  .feature-page.settings-page.profile-v2
+  .profile-editor
+  .button-primary:active {
+  transform: scale(0.98);
+}
+
+/* —— Resume studio —— */
+.workspace .feature-page.settings-page.profile-v2 .profile-resume-studio-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--ps-16);
+  align-items: start;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-resume-studio-count {
+  min-width: 92px;
+  padding: var(--ps-12);
+  border-radius: var(--ps-radius-sm);
+  text-align: center;
+  background: var(--ps-accent-soft);
+  border: 1px solid color-mix(in srgb, var(--ps-accent) 14%, transparent);
+  display: grid;
+  gap: 2px;
+}
+.workspace
+  .feature-page.settings-page.profile-v2
+  .profile-resume-studio-count
+  strong {
+  font-size: 1.3rem;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+.workspace
+  .feature-page.settings-page.profile-v2
+  .profile-resume-studio-count
+  span {
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ps-muted);
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-resume-studio-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--ps-16);
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-resume-section-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--ps-12);
+  align-items: start;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-resume-count {
+  font-size: 0.76rem;
+  font-weight: 650;
+  color: var(--ps-muted);
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-resume-library,
+.workspace .feature-page.settings-page.profile-v2 .profile-resume-upload {
+  display: grid;
+  gap: var(--ps-12);
+  min-width: 0;
+  padding: var(--ps-16);
+  border-radius: var(--ps-radius);
+  border: 1px solid var(--ps-line);
+  background: color-mix(in srgb, var(--ps-soft) 48%, var(--ps-panel));
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-resume-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--ps-12);
+  align-items: center;
+  padding: var(--ps-12);
+  border-radius: var(--ps-radius-sm);
+  border: 1px solid var(--ps-line);
+  background: var(--ps-panel);
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-resume-row:hover {
+  border-color: color-mix(in srgb, var(--ps-accent) 18%, var(--ps-line));
+  transform: translateY(-1px);
+  box-shadow: var(--ps-shadow);
+}
+.workspace
+  .feature-page.settings-page.profile-v2
+  .profile-resume-row.is-selected {
+  border-color: var(--ps-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ps-accent) 12%, transparent);
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-resume-rename {
+  min-height: 32px;
+  padding: 4px 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border-radius: 999px;
+  border: 1px solid var(--ps-line);
+  background: var(--ps-panel);
+  color: var(--ps-muted);
+  cursor: pointer;
+  transition: all 160ms ease;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-resume-rename:hover {
+  color: var(--ps-text);
+  border-color: color-mix(in srgb, var(--ps-accent) 30%, var(--ps-line));
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-resume-rename-form {
+  grid-column: 1 / -1 !important;
+  width: 100% !important;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: var(--ps-8) !important;
+  align-items: center !important;
+  padding-top: var(--ps-12) !important;
+  margin-top: var(--ps-8) !important;
+  border-top: 1px solid color-mix(in srgb, var(--ps-line) 65%, transparent) !important;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-resume-rename-form input {
+  flex: 1 1 200px !important;
+  min-width: 180px !important;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-resume-select {
+  display: flex;
+  align-items: center;
+  gap: var(--ps-12);
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-resume-file-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--ps-accent-soft);
+  color: var(--ps-accent);
+  font-size: 0.62rem;
+  font-weight: 800;
+  flex: 0 0 auto;
+}
+.workspace
+  .feature-page.settings-page.profile-v2
+  .profile-resume-upload-control {
+  display: grid;
+  gap: var(--ps-8);
+  position: relative;
+  padding: var(--ps-20);
+  border-radius: var(--ps-radius);
+  border: 1px dashed color-mix(in srgb, var(--ps-accent) 28%, var(--ps-line));
+  background: color-mix(in srgb, var(--ps-accent) 04%, var(--ps-panel));
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease;
+}
+.workspace
+  .feature-page.settings-page.profile-v2
+  .profile-resume-upload-control:hover {
+  border-color: var(--ps-accent);
+  background: color-mix(in srgb, var(--ps-accent) 07%, var(--ps-panel));
+}
+.workspace
+  .feature-page.settings-page.profile-v2
+  .profile-resume-upload-control
+  .file-picker-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-resume-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 280px);
+  gap: var(--ps-12) var(--ps-16);
+  align-items: center;
+  padding-top: var(--ps-16);
+  border-top: 1px solid color-mix(in srgb, var(--ps-line) 75%, transparent);
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-draft {
+  display: grid;
+  gap: var(--ps-16);
+  padding: var(--ps-16);
+  border-radius: var(--ps-radius);
+  border: 1px solid var(--ps-line);
+  background: color-mix(in srgb, var(--ps-soft) 50%, var(--ps-panel));
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-record-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--ps-16);
+  align-items: center;
+  padding: var(--ps-16);
+  border: 1px solid var(--ps-line);
+  border-radius: var(--ps-radius);
+  background: color-mix(in srgb, var(--ps-soft) 42%, var(--ps-panel));
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-record-row:hover {
+  border-color: color-mix(in srgb, var(--ps-line) 10%, var(--ps-accent) 18%);
+  box-shadow: var(--ps-shadow);
+  transform: translateY(-1px);
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-record-actions {
+  display: flex;
+  gap: var(--ps-8);
+}
+.workspace
+  .feature-page.settings-page.profile-v2
+  .profile-record-actions
+  .button {
+  min-height: 36px;
+  padding: 7px 14px;
+  font-size: 0.82rem;
+  border-radius: 999px;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ps-8);
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-feedback-card {
+  padding: var(--ps-16) !important;
+  border: 1px solid var(--ps-line) !important;
+  border-radius: var(--ps-radius) !important;
+  background: color-mix(
+    in srgb,
+    var(--warning-soft, #fff7e6) 60%,
+    var(--ps-panel)
+  ) !important;
+  box-shadow: none !important;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-hint,
+.workspace .feature-page.settings-page.profile-v2 .profile-empty {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  color: var(--ps-muted);
+}
+
+/* —— Dark —— */
+[data-theme="dark"] .workspace .feature-page.settings-page.profile-v2 {
+  --ps-accent-soft: color-mix(in srgb, var(--ps-accent) 18%, transparent);
+}
+[data-theme="dark"]
+  .workspace
+  .feature-page.settings-page.profile-v2
+  .profile-masthead,
+[data-theme="dark"]
+  .workspace
+  .feature-page.settings-page.profile-v2
+  .profile-tabs,
+[data-theme="dark"]
+  .workspace
+  .feature-page.settings-page.profile-v2
+  .profile-editor,
+[data-theme="dark"]
+  .workspace
+  .feature-page.settings-page.profile-v2
+  .profile-masthead-meter {
+  border-color: var(--border);
+}
+[data-theme="dark"] .workspace .feature-page.settings-page.profile-v2::before {
+  opacity: 0.35;
+}
+[data-theme="dark"]
+  .workspace
+  .feature-page.settings-page.profile-v2
+  .profile-editor
+  .button-primary {
+  background: var(--ps-accent) !important;
+  color: var(--text-on-primary, #000000) !important;
+}
+[data-theme="dark"]
+  .workspace
+  .feature-page.settings-page.profile-v2
+  .profile-editor
+  .button-primary:hover {
+  background: var(--primary-hover, var(--ps-accent)) !important;
+  color: var(--text-on-primary, #000000) !important;
+}
+
+/* —— Reduced motion —— */
+@media (prefers-reduced-motion: reduce) {
+  .workspace .feature-page.settings-page.profile-v2 .profile-tab,
+  .workspace .feature-page.settings-page.profile-v2 .profile-photo-upload,
+  .workspace .feature-page.settings-page.profile-v2 .profile-resume-row,
+  .workspace .feature-page.settings-page.profile-v2 .profile-record-row,
+  .workspace .feature-page.settings-page.profile-v2 .badge {
+    transition: none;
+  }
+  .workspace .feature-page.settings-page.profile-v2 .profile-tab:active,
+  .workspace
+    .feature-page.settings-page.profile-v2
+    .profile-photo-upload:active {
+    transform: none;
+  }
+  .workspace
+    .feature-page.settings-page.profile-v2
+    .profile-masthead-meter.is-complete {
+    animation: none;
+    opacity: 0;
+    max-height: 0;
+    margin: 0;
+    padding: 0;
+    border-width: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+}
+/* —— Responsive —— */
+@media (max-width: 899px) {
+  .workspace .feature-page.settings-page.profile-v2 .profile-masthead {
+    grid-template-columns: 64px minmax(0, 1fr) !important;
+  }
+  .workspace .feature-page.settings-page.profile-v2 .profile-avatar-preview {
+    width: 64px !important;
+    height: 64px !important;
+  }
+  .workspace .feature-page.settings-page.profile-v2 .profile-masthead-meter {
+    grid-column: 1 / -1;
+    align-self: stretch;
+  }
+  .workspace .feature-page.settings-page.profile-v2 .profile-tabs {
+    overflow-x: visible;
+  }
+  .workspace .feature-page.settings-page.profile-v2 .profile-tabs-track {
+    width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .workspace
+    .feature-page.settings-page.profile-v2
+    .profile-tabs-track::-webkit-scrollbar {
+    display: none;
+  }
+  .workspace .feature-page.settings-page.profile-v2 .profile-tab {
+    flex: 0 0 auto;
+    padding: 8px 14px;
+  }
+  .workspace
+    .feature-page.settings-page.profile-v2
+    .profile-resume-studio-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 720px) {
+  .workspace .feature-page.settings-page.profile-v2 {
+    --ps-pad: 20px;
+    --ps-28: 20px;
+    --ps-24: 20px;
+    --ps-6: 6px;
+    --ps-gap: 12px;
+    gap: 16px !important;
+    width: min(1080px, calc(100% - 20px)) !important;
+  }
+  .workspace .feature-page.settings-page.profile-v2 .profile-masthead {
+    padding: 16px;
+    gap: 12px !important;
+  }
+  .workspace .feature-page.settings-page.profile-v2 .profile-masthead-headline,
+  .workspace .feature-page.settings-page.profile-v2 .profile-masthead-facts {
+    white-space: normal;
+  }
+  .workspace .feature-page.settings-page.profile-v2 .profile-fields,
+  .workspace .feature-page.settings-page.profile-v2 .profile-composer,
+  .workspace .feature-page.settings-page.profile-v2 .profile-resume-actions {
+    grid-template-columns: 1fr;
+  }
+  .workspace .feature-page.settings-page.profile-v2 .profile-record-row {
+    grid-template-columns: 1fr;
+  }
+  .workspace .feature-page.settings-page.profile-v2 .profile-record-actions {
+    justify-content: stretch;
+  }
+  .workspace
+    .feature-page.settings-page.profile-v2
+    .profile-record-actions
+    .button {
+    flex: 1;
+  }
+  .workspace
+    .feature-page.settings-page.profile-v2
+    .profile-resume-studio-head {
+    flex-direction: column;
+  }
+  .workspace .feature-page.settings-page.profile-v2 .profile-editor {
+    padding: var(--ps-20) !important;
+  }
+}
+
+/* —— Unified Settings Navigation —— */
+.workspace .feature-page.settings-page.profile-v2 .settings-nav {
+  display: flex !important;
+  gap: var(--ps-8) !important;
+  width: 100% !important;
+  padding: 6px !important;
+  border-radius: var(--ps-radius, 16px) !important;
+  border: 1px solid var(--ps-line) !important;
+  background: var(--ps-panel) !important;
+  box-shadow: 0 2px 12px rgb(15 23 42 / 05%) !important;
+  overflow-x: auto !important;
+  scrollbar-width: none !important;
+}
+.workspace .feature-page.settings-page.profile-v2 .settings-nav::-webkit-scrollbar {
+  display: none !important;
+}
+.workspace .feature-page.settings-page.profile-v2 .settings-nav .settings-nav-tab {
+  display: inline-flex !important;
+  flex: 0 0 auto !important;
+  min-width: max-content !important;
+  touch-action: manipulation !important;
+  align-items: center !important;
+  gap: 8px !important;
+  min-height: 42px !important;
+  padding: 8px 18px !important;
+  border-radius: 12px !important;
+  border: 1px solid transparent !important;
+  background: transparent !important;
+  color: var(--ps-muted) !important;
+  font-size: 0.86rem !important;
+  font-weight: 650 !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+  text-decoration: none !important;
+  position: relative !important;
+  transition: color 160ms ease, background 160ms ease !important;
+}
+.workspace .feature-page.settings-page.profile-v2 .settings-nav .settings-nav-tab:hover {
+  color: var(--ps-text) !important;
+  background: color-mix(in srgb, var(--ps-text) 04%, transparent) !important;
+}
+.workspace .feature-page.settings-page.profile-v2 .settings-nav .settings-nav-tab.is-active {
+  color: var(--ps-text) !important;
+  font-weight: 700 !important;
+}
+.workspace .feature-page.settings-page.profile-v2 .settings-nav .settings-nav-tab:focus-visible {
+  outline: 2px solid var(--ps-accent) !important;
+  outline-offset: 2px !important;
+}
+
+/* —— Settings Canvas & Cards in Profile-v2 Design Language —— */
+.workspace .feature-page.settings-page.profile-v2 .settings-canvas,
+.feature-page.settings-page .settings-canvas,
+.settings-canvas {
+  display: grid !important;
+  gap: var(--ps-20, 20px) !important;
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+}
+.workspace .feature-page.settings-page.profile-v2 .settings-card,
+.feature-page.settings-page.profile-v2 .settings-card,
+.feature-page.settings-page .settings-card,
+.workspace .settings-canvas .settings-card,
+.settings-canvas > .settings-card,
+.settings-canvas .settings-card,
+.settings-card {
+  padding: var(--ps-24, 24px) var(--ps-28, var(--ps-pad, 28px)) !important;
+  border-radius: var(--ps-radius-lg, 20px) !important;
+  border: 1px solid var(--ps-line, var(--border)) !important;
+  background: var(--ps-panel, var(--surface)) !important;
+  box-shadow: var(--ps-shadow, var(--shadow-sm)) !important;
+  transition: border-color 200ms ease, box-shadow 200ms ease !important;
+  box-sizing: border-box !important;
+}
+.workspace .feature-page.settings-page.profile-v2 .settings-card:hover,
+.feature-page.settings-page .settings-card:hover,
+.workspace .settings-canvas .settings-card:hover,
+.settings-canvas > .settings-card:hover,
+.settings-canvas .settings-card:hover {
+  border-color: color-mix(in srgb, var(--ps-accent, var(--primary-strong)) 25%, var(--ps-line, var(--border))) !important;
+  box-shadow: var(--ps-shadow-hover, var(--shadow-md)) !important;
+}
+
+.workspace .feature-page.settings-page.profile-v2 .settings-card h2,
+.feature-page.settings-page .settings-card h2,
+.workspace .settings-canvas .settings-card h2,
+.settings-canvas > .settings-card h2,
+.settings-canvas .settings-card h2 {
+  margin: 0 0 var(--ps-6, 6px) !important;
+  color: var(--ps-text, var(--text)) !important;
+  font-size: 1.25rem !important;
+  font-weight: 650 !important;
+  letter-spacing: -0.025em !important;
+  line-height: 1.3 !important;
+}
+
+.workspace .feature-page.settings-page.profile-v2 h3,
+.feature-page.settings-page h3,
+.workspace .feature-page.settings-page.profile-v2 .profile-resume-upload h3,
+.settings-card h3 {
+  margin: 0 0 var(--ps-6, 6px) !important;
+  color: var(--ps-text, var(--text)) !important;
+  font-size: 1.05rem !important;
+  font-weight: 650 !important;
+  line-height: 1.3 !important;
+}
+
+.workspace .feature-page.settings-page.profile-v2 .eyebrow,
+.feature-page.settings-page .eyebrow,
+.workspace .feature-page.settings-page.profile-v2 .settings-card .eyebrow,
+.feature-page.settings-page .settings-card .eyebrow,
+.workspace .settings-canvas .settings-card .eyebrow,
+.settings-canvas > .settings-card .eyebrow,
+.settings-canvas .settings-card .eyebrow {
+  margin: 0 0 var(--ps-6, 6px) !important;
+  color: var(--ps-muted, var(--muted)) !important;
+  font-size: 0.72rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+}
+
+.workspace .feature-page.settings-page.profile-v2 .settings-card p.muted,
+.workspace .feature-page.settings-page.profile-v2 .settings-card .muted,
+.feature-page.settings-page .settings-card p.muted,
+.feature-page.settings-page .settings-card .muted,
+.workspace .settings-canvas .settings-card p.muted,
+.workspace .settings-canvas .settings-card .muted,
+.settings-canvas > .settings-card p.muted,
+.settings-canvas > .settings-card .muted,
+.settings-canvas .settings-card p.muted,
+.settings-canvas .settings-card .muted {
+  margin: 0 0 var(--ps-12, 12px) !important;
+  color: var(--ps-muted, var(--muted)) !important;
+  font-size: 0.9rem !important;
+  line-height: 1.5 !important;
+}
+
+@media (max-width: 720px) {
+  .workspace .feature-page.settings-page.profile-v2 .settings-card,
+  .feature-page.settings-page.profile-v2 .settings-card,
+  .feature-page.settings-page .settings-card,
+  .workspace .settings-canvas .settings-card,
+  .settings-canvas > .settings-card,
+  .settings-canvas .settings-card,
+  .settings-card {
+    padding: 20px 20px !important;
+  }
+}
+
+@media (max-width: 560px) {
+  .workspace .feature-page.settings-page.profile-v2 .settings-card,
+  .feature-page.settings-page.profile-v2 .settings-card,
+  .feature-page.settings-page .settings-card,
+  .workspace .settings-canvas .settings-card,
+  .settings-canvas > .settings-card,
+  .settings-canvas .settings-card,
+  .settings-card {
+    padding: 18px 16px !important;
+  }
+}
+
+/* —— Masthead Public Showcase Affordances —— */
+.workspace .feature-page.settings-page.profile-v2 .profile-masthead-showcase {
+  grid-column: 1 / -1 !important;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: var(--ps-12) !important;
+  padding-top: var(--ps-16) !important;
+  border-top: 1px solid color-mix(in srgb, var(--ps-line) 75%, transparent) !important;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-masthead-showcase-actions {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: var(--ps-8) !important;
+  align-items: center !important;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-showcase-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  min-height: 36px !important;
+  padding: 0 16px !important;
+  border-radius: 999px !important;
+  font-size: 0.8rem !important;
+  font-weight: 650 !important;
+  text-decoration: none !important;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-copy-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  min-height: 36px !important;
+  padding: 0 14px !important;
+  border-radius: 999px !important;
+  font-size: 0.8rem !important;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-claim-prompt {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: var(--ps-12) !important;
+  width: 100% !important;
+  padding: var(--ps-12) var(--ps-16) !important;
+  border-radius: var(--ps-radius-sm) !important;
+  background: color-mix(in srgb, var(--ps-accent) 06%, var(--ps-panel)) !important;
+  border: 1px dashed color-mix(in srgb, var(--ps-accent) 30%, var(--ps-line)) !important;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-claim-text {
+  margin: 0 !important;
+  font-size: 0.82rem !important;
+  color: var(--ps-muted) !important;
+  line-height: 1.4 !important;
+}
+
+/* —— 100% Complete Badge —— */
+.workspace .feature-page.settings-page.profile-v2 .profile-complete-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 5px 14px !important;
+  border-radius: 999px !important;
+  background: color-mix(in srgb, #10b981 12%, var(--ps-panel)) !important;
+  border: 1px solid color-mix(in srgb, #10b981 30%, transparent) !important;
+  color: #059669 !important;
+  font-size: 0.78rem !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.01em !important;
+}
+[data-theme="dark"] .workspace .feature-page.settings-page.profile-v2 .profile-complete-badge {
+  background: color-mix(in srgb, #10b981 18%, black) !important;
+  color: #34d399 !important;
+  border-color: color-mix(in srgb, #10b981 40%, transparent) !important;
+}
+
+/* —— Settings Toggle Lists & Options —— */
+.workspace .feature-page.settings-page.profile-v2 .settings-toggle-list {
+  display: grid !important;
+  gap: 0 !important;
+  min-width: 0 !important;
+  width: 100% !important;
+}
+.workspace .feature-page.settings-page.profile-v2 .settings-toggle {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  gap: var(--ps-16) !important;
+  align-items: center !important;
+  min-height: 52px !important;
+  padding: var(--ps-12) 0 !important;
+  border-top: 1px solid color-mix(in srgb, var(--ps-line) 65%, transparent) !important;
+  cursor: pointer !important;
+}
+.workspace .feature-page.settings-page.profile-v2 .settings-toggle:first-child {
+  border-top: 0 !important;
+  padding-top: 4px !important;
+}
+.workspace .feature-page.settings-page.profile-v2 .settings-toggle-copy {
+  display: grid !important;
+  gap: 2px !important;
+  min-width: 0 !important;
+}
+.workspace .feature-page.settings-page.profile-v2 .settings-toggle-copy strong {
+  font-size: 0.92rem !important;
+  font-weight: 650 !important;
+  color: var(--ps-text) !important;
+}
+.workspace .feature-page.settings-page.profile-v2 .settings-toggle-copy small {
+  font-size: 0.78rem !important;
+  color: var(--ps-muted) !important;
+  line-height: 1.4 !important;
+}
+.workspace .feature-page.settings-page.profile-v2 .settings-toggle input[type="checkbox"] {
+  width: 20px !important;
+  height: 20px !important;
+  min-width: 20px !important;
+  min-height: 20px !important;
+  accent-color: var(--ps-accent) !important;
+  cursor: pointer !important;
+}
+
+/* —— Session & Danger Zone Cards —— */
+.workspace .feature-page.settings-page.profile-v2 .settings-session-identity {
+  display: flex !important;
+  align-items: center !important;
+  gap: var(--ps-16) !important;
+  padding: var(--ps-16) !important;
+  border-radius: var(--ps-radius) !important;
+  border: 1px solid var(--ps-line) !important;
+  background: color-mix(in srgb, var(--ps-soft) 45%, var(--ps-panel)) !important;
+}
+.workspace .feature-page.settings-page.profile-v2 .settings-session-mark {
+  display: grid !important;
+  place-items: center !important;
+  width: 48px !important;
+  height: 48px !important;
+  flex: 0 0 auto !important;
+  border-radius: 14px !important;
+  background: var(--ps-accent-soft) !important;
+  color: var(--ps-accent) !important;
+  font-size: 1rem !important;
+  font-weight: 700 !important;
+}
+.workspace .feature-page.settings-page.profile-v2 .settings-danger-card {
+  border-color: color-mix(in srgb, var(--danger, #dc2626) 30%, var(--ps-line)) !important;
+  background: color-mix(in srgb, var(--danger, #dc2626) 03%, var(--ps-panel)) !important;
+}
+.workspace .feature-page.settings-page.profile-v2 .settings-save-card {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  gap: var(--ps-16) !important;
+}
+
+/* —— SelectWithOther helper —— */
+.workspace .feature-page.settings-page.profile-v2 .profile-other-field {
+  display: grid !important;
+  gap: var(--ps-6, 6px) !important;
+  margin-top: var(--ps-8) !important;
+}
+
+/* —— Dedicated Settings Actions Bar —— */
+.workspace .feature-page.settings-page.profile-v2 .settings-actions-bar {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  gap: var(--ps-16) !important;
+  padding: var(--ps-4) 0 !important;
+}
+
+/* —— Resume Library Row Elements —— */
+.workspace .feature-page.settings-page.profile-v2 .profile-resume-row-copy {
+  display: grid !important;
+  gap: 2px !important;
+  min-width: 0 !important;
+  flex: 1 1 auto !important;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-resume-row-copy strong {
+  font-size: 0.88rem !important;
+  font-weight: 650 !important;
+  color: var(--ps-text) !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-resume-row-copy small {
+  font-size: 0.74rem !important;
+  color: var(--ps-muted) !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+.workspace .feature-page.settings-page.profile-v2 .profile-resume-active {
+  display: inline-flex !important;
+  align-items: center !important;
+  padding: 2px 8px !important;
+  border-radius: 999px !important;
+  background: color-mix(in srgb, #10b981 12%, var(--ps-panel)) !important;
+  border: 1px solid color-mix(in srgb, #10b981 30%, transparent) !important;
+  color: #059669 !important;
+  font-size: 0.68rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.02em !important;
+  text-transform: uppercase !important;
+  flex: 0 0 auto !important;
+}
+[data-theme="dark"] .workspace .feature-page.settings-page.profile-v2 .profile-resume-active {
+  background: color-mix(in srgb, #10b981 18%, black) !important;
+  color: #34d399 !important;
+}
+

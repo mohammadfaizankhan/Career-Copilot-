@@ -1,18 +1,14 @@
-import {
-  Bookmark,
-  X,
-  MapPin,
-  Building2,
-  Briefcase,
-  CheckCircle2,
-  Send,
-  ThumbsDown,
-  ExternalLink,
-} from "lucide-react";
+import { CopilotIcon } from "@/components/ui/copilot-icons";
 import { useEffect } from "react";
+import { motion, useReducedMotion } from "motion/react";
+import {
+  modalBackdropVariants,
+  modalPanelVariants,
+} from "@/components/ui/motion-system";
 import type { Job, Recommendation, SavedJobStatus } from "./job-types";
 import { statusLabel, statusTone } from "./job-types";
 import { Button } from "@/shared/ui/primitives";
+
 
 export function JobModal({
   job,
@@ -33,6 +29,7 @@ export function JobModal({
   onClose: () => void;
   onDismiss: () => void;
 }) {
+  const reduceMotion = useReducedMotion();
   const publishedDate = job.published_at ? new Date(job.published_at).toLocaleDateString() : null;
   const salaryText =
     job.salary_min && job.salary_max
@@ -61,10 +58,19 @@ export function JobModal({
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose} style={{ zIndex: 100 }}>
-      <div
+    <motion.div
+      className="modal-backdrop"
+      onClick={onClose}
+      style={{ zIndex: 100 }}
+      variants={modalBackdropVariants}
+      initial={reduceMotion ? false : "initial"}
+      animate="animate"
+      exit="exit"
+    >
+      <motion.div
         className="modal-panel modal-panel-wide"
         onClick={(e: React.MouseEvent) => e.stopPropagation()}
+        variants={modalPanelVariants}
         style={{
           display: "flex",
           flexDirection: "column",
@@ -79,17 +85,17 @@ export function JobModal({
             <div>
               <h2 style={{ margin: 0 }}>{job.title}</h2>
               <p className="muted" style={{ margin: "8px 0 0" }}>
-                <Building2 size={14} aria-hidden /> {job.company}
+                <CopilotIcon name="company" size={14} /> {job.company}
                 {job.location ? (
                   <>
                     {" · "}
-                    <MapPin size={14} aria-hidden /> {job.location}
+                    <CopilotIcon name="pin" size={14} /> {job.location}
                   </>
                 ) : null}
               </p>
             </div>
             <button type="button" className="button button-secondary" onClick={onClose} aria-label="Close">
-              <X size={16} />
+              <CopilotIcon name="close" size={16} />
             </button>
           </div>
         </div>
@@ -97,7 +103,7 @@ export function JobModal({
           <div className="cluster" style={{ marginBottom: 16 }}>
             {recommendation ? (
               <span className="badge badge-success">
-                <CheckCircle2 size={14} aria-hidden /> {Math.round(recommendation.match_score)}% match
+                <CopilotIcon name="check" size={14} /> {Math.round(recommendation.match_score)}% match
               </span>
             ) : null}
             {isSaved ? (
@@ -107,7 +113,7 @@ export function JobModal({
             ) : null}
             {job.work_mode ? (
               <span className="badge badge-info">
-                <Briefcase size={14} aria-hidden /> {job.work_mode}
+                <CopilotIcon name="work" size={14} /> {job.work_mode}
               </span>
             ) : null}
             {salaryText ? <span className="badge badge-info">{salaryText}</span> : null}
@@ -127,7 +133,7 @@ export function JobModal({
         </div>
         <div className="cluster" style={{ padding: 16, borderTop: "1px solid var(--border)", flexWrap: "wrap" }}>
           <Button onClick={onToggleSave} variant="secondary">
-            <Bookmark size={16} aria-hidden /> {isSaved && !isApplied && !isRejected ? "Unsave" : "Save"}
+            <CopilotIcon name="save" size={16} /> {isSaved && !isApplied && !isRejected ? "Unsave" : "Save"}
           </Button>
           <Button
             variant={isApplied ? "secondary" : "primary"}
@@ -135,7 +141,7 @@ export function JobModal({
             disabled={isApplied}
             aria-label={isApplied ? "Already marked applied" : "Mark as applied"}
           >
-            <Send size={16} aria-hidden /> {isApplied ? "Applied" : "Mark applied"}
+            <CopilotIcon name="apply" size={16} /> {isApplied ? "Applied" : "Mark applied"}
           </Button>
           <Button
             variant="secondary"
@@ -143,7 +149,7 @@ export function JobModal({
             disabled={isRejected}
             aria-label={isRejected ? "Already marked rejected" : "Mark as rejected"}
           >
-            <ThumbsDown size={16} aria-hidden /> {isRejected ? "Rejected" : "Mark rejected"}
+            <CopilotIcon name="reject" size={16} /> {isRejected ? "Rejected" : "Mark rejected"}
           </Button>
           <Button variant="ghost" onClick={onDismiss}>
             Dismiss
@@ -157,11 +163,11 @@ export function JobModal({
               onClick={handleApplyClick}
             >
               Apply
-              <ExternalLink size={14} aria-hidden />
+              <CopilotIcon name="external" size={14} />
             </a>
           ) : null}
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

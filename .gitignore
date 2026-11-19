@@ -20,6 +20,7 @@ test-results/
 frontend/test-results/
 playwright-report/
 frontend/playwright-report/
+frontend/e2e/artifacts/
 .pytest_cache/
 backend/.pytest_cache/
 .ruff_cache/
@@ -47,7 +48,6 @@ backend/career_copilot_api.egg-info/
 .env.*
 !.env.example
 /secrets/
-firebase-service-account*.json
 
 # Logs / OS
 *.log
@@ -62,12 +62,17 @@ backend/.data/
 .agents/
 .codex/
 .grok/
-
-# Optional OmniRoute sidecar source and dependencies; the app must not depend on it.
-/integrations/omniroute/
+.grok-icon-verify/
 
 # Editor
 .idea/
 .vscode/
 *.swp
 *~
+
+# Presentation assets (not code)
+Career-Copilot-Project-Presentation/
+*.pptx
+
+# Codex smoke-test logs
+.codex-*
